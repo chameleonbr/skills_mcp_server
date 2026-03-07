@@ -14,6 +14,7 @@ from agno.skills.loaders.local import LocalSkills
 from agno.skills.skill import Skill
 
 from models import SkillDetail, SkillSummary
+from s3_skills import S3Skills
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,36 @@ class SkillManager:
 
     Handles installation, deletion, and reload of skills stored in SKILLS_DIR.
     Delegates skill access and tool generation to the Agno `Skills` orchestrator.
+
+    Args:
+        skills_dir:    Path to the local skills directory (used by LocalSkills).
+        storage_mode:  ``"local"`` (default) or ``"s3"``.
+                       When ``"s3"``, S3Skills is used as the loader instead of LocalSkills.
+        s3_bucket:     S3 bucket name (required when storage_mode="s3").
+        s3_prefix:     Key prefix inside the bucket (default: ``"skills/"``).
+        s3_cache_dir:  Local directory where S3 objects are cached (default: ``".s3cache"``).
+        s3_region:     Optional AWS region name.
+        s3_endpoint:   Optional custom endpoint URL (MinIO, LocalStack…).
     """
 
-    def __init__(self, skills_dir: str):
+    def __init__(
+        self,
+        skills_dir: str,
+        storage_mode: str = "local",
+        s3_bucket: Optional[str] = None,
+        s3_prefix: str = "skills/",
+        s3_cache_dir: str = ".s3cache",
+        s3_region: Optional[str] = None,
+        s3_endpoint: Optional[str] = None,
+    ):
         self.skills_dir = Path(skills_dir)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
+        self.storage_mode = storage_mode.lower()
+        self.s3_bucket = s3_bucket
+        self.s3_prefix = s3_prefix
+        self.s3_cache_dir = s3_cache_dir
+        self.s3_region = s3_region
+        self.s3_endpoint = s3_endpoint
         self._agno_skills: Optional[Skills] = None
         self._load()
 
@@ -36,14 +62,33 @@ class SkillManager:
     # ------------------------------------------------------------------
 
     def _load(self) -> None:
-        """(Re)load skills from disk into the Agno Skills registry."""
+        """(Re)load skills into the Agno Skills registry using the configured loader."""
         try:
-            loader = LocalSkills(path=str(self.skills_dir), validate=False)
+            if self.storage_mode == "s3":
+                if not self.s3_bucket:
+                    raise ValueError(
+                        "SKILLS_STORAGE=s3 requires S3_BUCKET to be configured."
+                    )
+                loader = S3Skills(
+                    bucket=self.s3_bucket,
+                    prefix=self.s3_prefix,
+                    cache_dir=self.s3_cache_dir,
+                    validate=False,
+                    region_name=self.s3_region,
+                    endpoint_url=self.s3_endpoint,
+                )
+                logger.info(
+                    "Using S3Skills loader (s3://%s/%s → %s)",
+                    self.s3_bucket, self.s3_prefix, self.s3_cache_dir,
+                )
+            else:
+                loader = LocalSkills(path=str(self.skills_dir), validate=False)
+                logger.info("Using LocalSkills loader (%s)", self.skills_dir)
+
             self._agno_skills = Skills(loaders=[loader])
             logger.info(
-                "Loaded %d skill(s) from '%s'",
+                "Loaded %d skill(s)",
                 len(self._agno_skills.get_all_skills()),
-                self.skills_dir,
             )
         except Exception as exc:
             logger.error("Error loading skills: %s", exc)

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "agno>=1.4.4",
+    "boto3>=1.38.0",
     "fastapi>=0.135.1",
     "fastmcp>=3.1.0",
     "httpx>=0.28.1",

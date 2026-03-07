@@ -7,12 +7,19 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
-      # Prevents overwriting the container's generated .venv with local one
-      - /app/.venv
+      # Persistent named volume for skills storage (survives container restarts)
+      - skills_data:/app/skills
+      # Uncomment below for local development with hot-reload:
+      # - .:/app
+      # - /app/.venv
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
-    # Optional: overrides CMD from Dockerfile to enable hot-reload in development
-    command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      # Override SKILLS_DIR to point to the mounted volume path
+      - SKILLS_DIR=/app/skills
+    command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+volumes:
+  skills_data:
+    driver: local
