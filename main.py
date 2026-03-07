@@ -16,7 +16,7 @@ from typing import AsyncIterator
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.requests import Request
