@@ -103,6 +103,9 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
                 )
         return await call_next(request)
 
+# Create the FastMCP ASGI app instance
+mcp_app = mcp.http_app(path="/mcp")
+
 # ---------------------------------------------------------------------------
 # FastAPI application
 # ---------------------------------------------------------------------------
@@ -129,7 +132,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("Skills MCP Server ready. Storage backend: %s", SKILLS_STORAGE)
 
-    yield  # ← server handles requests here
+    # Run the FastMCP ASGI app's lifespan context manager
+    # This is required to initialize the StreamableHTTPSessionManager task group.
+    async with mcp_app.router.lifespan_context(app):
+        yield  # ← server handles requests here
 
     logger.info("Shutting down.")
 
@@ -144,6 +150,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
 
 # Set the app reference so `_get_manager` can access app.state at request time
 _app_ref = app
@@ -178,4 +185,11 @@ def health() -> JSONResponse:
         }
     )
 
-app.mount("/", mcp.http_app(path="/mcp"))
+# ---------------------------------------------------------------------------
+# FastMCP mounted at /
+#
+# IMPORTANT: When FastAPI mounts at "/", it forwards everything.
+# By passing mcp_app here, we ensure the same instance that has its
+# lifespan initialized above is the one handling requests.
+# ---------------------------------------------------------------------------
+app.mount("/", mcp_app)
