@@ -165,18 +165,6 @@ app.add_middleware(MCPAuthMiddleware)
 app.include_router(skills_routes.router)
 
 # ---------------------------------------------------------------------------
-# FastMCP mounted at /mcp  (StreamableHTTP transport)
-#
-# IMPORTANT: path must be "/" here, NOT "/mcp".
-# When FastAPI mounts at "/mcp", Starlette strips that prefix before forwarding
-# to the sub-app. So the sub-app must register its handler at "/" or it will
-# never match incoming requests (causing 307 → 404 loops).
-#   POST /mcp     → MCP initialize / tool calls (StreamableHTTP)
-#   GET  /mcp/sse → Server-Sent Events stream (SSE fallback)
-# ---------------------------------------------------------------------------
-app.mount("/mcp", mcp.http_app(path="/"))
-
-# ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
 @app.get("/health", tags=["Health"], summary="Health check")
@@ -189,3 +177,5 @@ def health() -> JSONResponse:
             "skills_loaded": len(manager.list_skills()),
         }
     )
+
+app.mount("/", mcp.http_app(path="/mcp"))

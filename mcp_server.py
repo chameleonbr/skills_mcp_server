@@ -33,8 +33,7 @@ def create_mcp_server(get_manager: Callable[[], SkillManager]) -> FastMCP:
         name="Skills MCP Server",
         instructions=(
             "This server exposes agent skills. "
-            "Start by calling get_available_skills() to discover what is available. "
-            "Then use get_skill_instructions(skill_name) to load the full guidance "
+            "Use get_skill_instructions(skill_name) to load the full guidance "
             "for the skill that matches your task."
         ),
     )
