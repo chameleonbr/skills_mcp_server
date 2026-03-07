@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 API_KEY: str = os.environ.get("API_KEY", "")
 SKILLS_DIR: str = os.environ.get("SKILLS_DIR", "skills")
+ALLOW_RUN_SCRIPTS: bool = os.environ.get("ALLOW_RUN_SCRIPTS", "false").lower() == "true"
 
 # Storage backend: "local" (default) or "s3"
 SKILLS_STORAGE: str = os.environ.get("SKILLS_STORAGE", "local").lower()
@@ -123,6 +124,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         s3_cache_dir=S3_CACHE_DIR,
         s3_region=S3_REGION or None,
         s3_endpoint=S3_ENDPOINT or None,
+        allow_run_scripts=ALLOW_RUN_SCRIPTS,
     )
     app.state.skill_manager = skill_manager
 

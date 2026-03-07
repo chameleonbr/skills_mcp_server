@@ -101,3 +101,72 @@ def test_get_system_prompt_snippet_filtered(mock_skills, tmp_path):
     manager._agno_skills.get_skill.assert_called_with("brand-guidelines")
     filtered_mock.get_system_prompt_snippet.assert_called_once()
     assert filtered_mock._skills["brand-guidelines"] == mock_skill
+
+
+def test_validate_safe_name(tmp_path):
+    manager = SkillManager(skills_dir=str(tmp_path))
+    # Should not raise
+    manager._validate_safe_name("valid-name_123")
+    
+    with pytest.raises(ValueError, match="Invalid skill_name format"):
+        manager._validate_safe_name("invalid name!", "skill_name")
+
+    with pytest.raises(ValueError, match="Invalid name format"):
+        manager._validate_safe_name("../traversal")
+
+
+def test_validate_safe_path(tmp_path):
+    manager = SkillManager(skills_dir=str(tmp_path))
+    # Should not raise
+    manager._validate_safe_path("valid/path/file.py")
+    
+    with pytest.raises(ValueError, match="Directory traversal and absolute paths are not allowed."):
+        manager._validate_safe_path("../secret.txt")
+
+    with pytest.raises(ValueError, match="Directory traversal and absolute paths are not allowed."):
+        manager._validate_safe_path("/etc/passwd")
+
+
+def test_mcp_get_script_security_validations(tmp_path):
+    manager = SkillManager(skills_dir=str(tmp_path))
+    manager._agno_skills = MagicMock()
+    manager._agno_skills._get_skill_script.return_value = "script output"
+
+    # Valid call
+    assert manager.mcp_get_script("safe-skill", "safe_script.py") == "script output"
+    manager._agno_skills._get_skill_script.assert_called_with("safe-skill", "safe_script.py", execute=False, args=None)
+
+    # Invalid names/paths
+    with pytest.raises(ValueError):
+        manager.mcp_get_script("bad name", "safe_script.py")
+    
+    with pytest.raises(ValueError):
+        manager.mcp_get_script("safe-skill", "/etc/passwd")
+
+
+def test_mcp_get_script_execute_disabled(tmp_path):
+    manager = SkillManager(skills_dir=str(tmp_path), allow_run_scripts=False)
+    manager._agno_skills = MagicMock()
+
+    # Reading script is allowed
+    manager.mcp_get_script("safe-skill", "safe_script.py", execute=False)
+    manager._agno_skills._get_skill_script.assert_called_with("safe-skill", "safe_script.py", execute=False, args=None)
+
+    # Executing script is blocked
+    with pytest.raises(ValueError, match="Script execution is disabled"):
+        manager.mcp_get_script("safe-skill", "safe_script.py", execute=True)
+
+
+def test_mcp_get_script_execute_enabled_with_shell_injection(tmp_path):
+    manager = SkillManager(skills_dir=str(tmp_path), allow_run_scripts=True)
+    manager._agno_skills = MagicMock()
+    manager._agno_skills._get_skill_script.return_value = "script output"
+
+    # Shell injection in arguments is still blocked
+    with pytest.raises(ValueError, match="forbidden shell characters"):
+        manager.mcp_get_script("safe-skill", "safe_script.py", execute=True, args=["arg1", "; ls"])
+
+    with pytest.raises(ValueError, match="forbidden shell characters"):
+        manager.mcp_get_script("safe-skill", "safe_script.py", execute=True, args=["arg1", "&& rm -rf /"])
+
+

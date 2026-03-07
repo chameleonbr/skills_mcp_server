@@ -7,7 +7,7 @@ Exposes skill-access tools via FastMCP:
   - get_skill_script:       read or execute a script from a skill
 """
 import logging
-from typing import Callable
+from typing import Callable, List, Optional
 
 from fastmcp import FastMCP
 
@@ -102,6 +102,7 @@ def create_mcp_server(get_manager: Callable[[], SkillManager]) -> FastMCP:
         skill_name: str,
         script_path: str,
         execute: bool = False,
+        args: Optional[List[str]] = None,
     ) -> str:
         """Read or execute a script from a skill.
 
@@ -112,14 +113,16 @@ def create_mcp_server(get_manager: Callable[[], SkillManager]) -> FastMCP:
             skill_name:  The unique name of the skill.
             script_path: Filename of the script (e.g. 'run.py').
             execute:     Whether to execute the script (default: False).
+            args:        Arguments to pass to the script (default: None).
         """
         logger.debug(
-            "MCP tool: get_skill_script(skill_name=%r, script_path=%r, execute=%r)",
+            "MCP tool: get_skill_script(skill_name=%r, script_path=%r, execute=%r, args=%r)",
             skill_name,
             script_path,
             execute,
+            args,
         )
-        return get_manager().mcp_get_script(skill_name, script_path, execute=execute)
+        return get_manager().mcp_get_script(skill_name, script_path, execute=execute, args=args)
 
     # -----------------------------------------------------------------------
     # Prompt: prompt_snippet

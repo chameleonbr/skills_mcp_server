@@ -306,6 +306,7 @@ Use this skill when the user asks about stock prices or financial data...
 | `API_KEY` | *(required)* | Secret key for REST API and MCP authentication |
 | `SKILLS_DIR` | `skills` | Local directory for skill folders (used by `local` backend) |
 | `SKILLS_STORAGE` | `local` | Storage backend: `local` or `s3` |
+| `ALLOW_RUN_SCRIPTS`| `false` | Whether to allow script execution via `mcp_get_script` |
 
 ### S3 Storage (`SKILLS_STORAGE=s3`)
 

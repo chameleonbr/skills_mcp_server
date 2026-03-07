@@ -34,6 +34,7 @@ class SkillManager:
         s3_cache_dir:  Local directory where S3 objects are cached (default: ``".s3cache"``).
         s3_region:     Optional AWS region name.
         s3_endpoint:   Optional custom endpoint URL (MinIO, LocalStack…).
+        allow_run_scripts: Whether to allow script execution (default: False).
     """
 
     def __init__(
@@ -45,6 +46,7 @@ class SkillManager:
         s3_cache_dir: str = ".s3cache",
         s3_region: Optional[str] = None,
         s3_endpoint: Optional[str] = None,
+        allow_run_scripts: bool = False,
     ):
         self.skills_dir = Path(skills_dir)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
@@ -54,6 +56,7 @@ class SkillManager:
         self.s3_cache_dir = s3_cache_dir
         self.s3_region = s3_region
         self.s3_endpoint = s3_endpoint
+        self.allow_run_scripts = allow_run_scripts
         self._agno_skills: Optional[Skills] = None
         self._load()
 
@@ -445,12 +448,25 @@ class SkillManager:
     # MCP delegators (thin wrappers around Agno internals)
     # ------------------------------------------------------------------
 
+    def _validate_safe_name(self, name: str, param_name: str = "name") -> None:
+        """Ensure name contains only safe characters."""
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", name):
+            raise ValueError(f"Invalid {param_name} format: {name}")
+
+    def _validate_safe_path(self, path: str, param_name: str = "path") -> None:
+        """Ensure path does not contain directory traversal or absolute paths."""
+        if ".." in path or path.startswith("/") or path.startswith("\\"):
+            raise ValueError(f"Invalid {param_name}. Directory traversal and absolute paths are not allowed.")
+
     def mcp_get_instructions(self, skill_name: str) -> str:
         """Delegate to Agno's _get_skill_instructions."""
+        self._validate_safe_name(skill_name, "skill_name")
         return self.agno._get_skill_instructions(skill_name)
 
     def mcp_get_reference(self, skill_name: str, reference_path: str) -> str:
         """Delegate to Agno's _get_skill_reference."""
+        self._validate_safe_name(skill_name, "skill_name")
+        self._validate_safe_path(reference_path, "reference_path")
         return self.agno._get_skill_reference(skill_name, reference_path)
 
     def mcp_get_script(
@@ -458,9 +474,22 @@ class SkillManager:
         skill_name: str,
         script_path: str,
         execute: bool = False,
+        args: Optional[List[str]] = None,
     ) -> str:
         """Delegate to Agno's _get_skill_script."""
-        return self.agno._get_skill_script(skill_name, script_path, execute=execute)
+        self._validate_safe_name(skill_name, "skill_name")
+        self._validate_safe_path(script_path, "script_path")
+
+        if execute:
+            if not self.allow_run_scripts:
+                raise ValueError("Script execution is disabled by configuration (ALLOW_RUN_SCRIPTS=false).")
+            if args:
+                forbidden_chars = set("&|;$><`\\n\\r")
+                for arg in args:
+                    if any(c in forbidden_chars for c in arg):
+                        raise ValueError(f"Argument contains forbidden shell characters: {arg}")
+
+        return self.agno._get_skill_script(skill_name, script_path, execute=execute, args=args)
 
     def get_system_prompt_snippet(self, skill_list: Optional[List[str]] = None) -> str:
         """Generate a system prompt snippet filtered by an optional blocklist/allowlist.
