@@ -1,0 +1,18 @@
+services:
+  skills-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skills-mcp-server
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      # Prevents overwriting the container's generated .venv with local one
+      - /app/.venv
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Optional: overrides CMD from Dockerfile to enable hot-reload in development
+    command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

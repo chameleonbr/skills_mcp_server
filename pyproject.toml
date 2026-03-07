@@ -1,0 +1,14 @@
+[project]
+name = "skills-mcp-server"
+version = "0.1.0"
+description = "A centralized MCP server for managing and executing Agno agent skills."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "agno>=1.4.4",
+    "fastapi>=0.135.1",
+    "fastmcp>=3.1.0",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.1.0",
+    "uvicorn[standard]>=0.34.0",
+]
