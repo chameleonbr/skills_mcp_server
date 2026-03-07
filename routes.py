@@ -6,6 +6,7 @@ from fastapi.security import APIKeyHeader
 
 from models import (
     AddSkillRequest,
+    InstallResponse,
     MessageResponse,
     SkillDetail,
     SkillSummary,
@@ -105,18 +106,17 @@ def get_skill(
 
 @router.post(
     "",
-    response_model=MessageResponse,
+    response_model=InstallResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Install a new skill (JSON)",
 )
 async def add_skill(
-    unique_name: str,
     body: AddSkillRequest,
     manager: Annotated[SkillManager, Depends(get_skill_manager)],
-) -> MessageResponse:
+) -> InstallResponse:
     """Install a new skill from a URL or base64-encoded zip archive.
 
-    - `unique_name` (query param): The folder name for the skill.
+    The skill name will be read from its SKILL.md.
     - Body: `url` OR `zip_base64` must be provided.
     """
     if not body.url and not body.zip_base64:
@@ -125,14 +125,21 @@ async def add_skill(
             detail="Either 'url' or 'zip_base64' must be provided.",
         )
     try:
-        path = await manager.install_skill(
-            unique_name=unique_name,
+        path, skill_name = await manager.install_skill(
             url=body.url,
             zip_base64=body.zip_base64,
         )
-        return MessageResponse(message=f"Skill '{unique_name}' installed at {path}.")
+        return InstallResponse(
+            message=f"Skill '{skill_name}' installed at {path}.",
+            skill_name=skill_name,
+        )
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
     except Exception as exc:
-        logger.exception("Failed to install skill '%s'", unique_name)
+        logger.exception("Failed to install skill")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
@@ -141,19 +148,17 @@ async def add_skill(
 
 @router.post(
     "/upload",
-    response_model=MessageResponse,
+    response_model=InstallResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Install a skill via file upload",
 )
 async def upload_skill(
-    unique_name: Annotated[str, Form(description="Unique folder name for the skill.")],
     file: Annotated[UploadFile, File(description="Zip archive (.zip) containing the skill folder.")],
     manager: Annotated[SkillManager, Depends(get_skill_manager)],
-) -> MessageResponse:
+) -> InstallResponse:
     """Install a skill by uploading a .zip file directly (multipart/form-data).
 
     Form fields:
-    - **unique_name**: the folder name to use inside SKILLS_DIR.
     - **file**: the `.zip` archive containing the skill (must have a `SKILL.md` inside).
     """
     if not file.filename or not file.filename.endswith(".zip"):
@@ -163,49 +168,24 @@ async def upload_skill(
         )
     try:
         zip_bytes = await file.read()
-        path = manager._extract_zip_to_skills_dir(zip_bytes, unique_name)
+        path, skill_name = manager._extract_zip_to_skills_dir(zip_bytes)
         manager.reload()
-        return MessageResponse(message=f"Skill '{unique_name}' installed at {path}.")
+        return InstallResponse(
+            message=f"Skill '{skill_name}' installed at {path}.",
+            skill_name=skill_name,
+        )
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
     except Exception as exc:
-        logger.exception("Failed to upload skill '%s'", unique_name)
+        logger.exception("Failed to upload skill")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         ) from exc
 
-
-@router.put(
-    "/{unique_name}",
-    response_model=MessageResponse,
-    summary="Update an existing skill",
-)
-async def update_skill(
-    unique_name: str,
-    body: UpdateSkillRequest,
-    manager: Annotated[SkillManager, Depends(get_skill_manager)],
-) -> MessageResponse:
-    """Update an existing skill by replacing its directory with fresh content.
-
-    Internally this is an install that overwrites the existing directory.
-    """
-    if not body.url and not body.zip_base64:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Either 'url' or 'zip_base64' must be provided.",
-        )
-    try:
-        path = await manager.install_skill(
-            unique_name=unique_name,
-            url=body.url,
-            zip_base64=body.zip_base64,
-        )
-        return MessageResponse(message=f"Skill '{unique_name}' updated at {path}.")
-    except Exception as exc:
-        logger.exception("Failed to update skill '%s'", unique_name)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
-        ) from exc
 
 
 @router.delete(

@@ -122,19 +122,20 @@ Returns `200 OK` with the number of currently loaded skills.
 
 ## 📥 Installing Skills
 
+*Note: You no longer need to provide a name. The server will automatically extract the skill name from the `SKILL.md` file inside the archive.*
+
 ### 1. File Upload (multipart)
 
 ```bash
 curl -X POST http://localhost:8000/skills/upload \
   -H "X-API-Key: your_api_key" \
-  -F "unique_name=my_skill" \
   -F "file=@my_skill.zip"
 ```
 
 ### 2. URL (direct zip download)
 
 ```bash
-curl -X POST "http://localhost:8000/skills?unique_name=my_skill" \
+curl -X POST "http://localhost:8000/skills" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/my_skill.zip"}'
@@ -146,28 +147,28 @@ You can point directly to a **GitHub repository** or a **subdirectory** inside o
 
 ```bash
 # Entire repository (uses main branch)
-curl -X POST "http://localhost:8000/skills?unique_name=my_skill" \
+curl -X POST "http://localhost:8000/skills" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://github.com/owner/repo"}'
 
 # Specific branch
-curl -X POST "http://localhost:8000/skills?unique_name=my_skill" \
+curl -X POST "http://localhost:8000/skills" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://github.com/owner/repo/tree/develop"}'
 
 # Specific subfolder inside a repo
-curl -X POST "http://localhost:8000/skills?unique_name=yahoo_finance" \
+curl -X POST "http://localhost:8000/skills" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/agno-agi/agno/tree/main/cookbook/skills/yahoo_finance"}'
+  -d '{"url": "https://github.com/anthropics/skills/tree/main/skills/skill-creator"}'
 ```
 
 ### 4. Base64 Zip
 
 ```bash
-curl -X POST "http://localhost:8000/skills?unique_name=my_skill" \
+curl -X POST "http://localhost:8000/skills" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
   -d "{\"zip_base64\": \"$(base64 -w0 my_skill.zip)\"}"

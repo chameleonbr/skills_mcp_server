@@ -64,6 +64,13 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class InstallResponse(BaseModel):
+    """Response returned when a skill is successfully installed."""
+
+    message: str
+    skill_name: str
+
+
 class ErrorResponse(BaseModel):
     """Error response."""
 

@@ -144,23 +144,12 @@ class SkillManager:
     # Skill installation helpers
     # ------------------------------------------------------------------
 
-    def _extract_zip_to_skills_dir(
-        self, zip_bytes: bytes, unique_name: str
-    ) -> Path:
-        """Extract a zip archive into SKILLS_DIR/<unique_name>.
+    def _extract_zip_to_skills_dir(self, zip_bytes: bytes) -> Tuple[Path, str]:
+        """Extract a zip archive into SKILLS_DIR/<skill_name>.
 
-        The zip is expected to contain either:
-        - A single top-level folder with SKILL.md inside, OR
-        - SKILL.md directly at the root of the archive.
-
-        Returns the path to the installed skill directory.
+        Reads `SKILL.md` to determine the `<skill_name>`.
+        Returns a tuple of (skill_directory_path, skill_name).
         """
-        target_dir = self.skills_dir / unique_name
-
-        # Remove previous version if it exists
-        if target_dir.exists():
-            shutil.rmtree(target_dir)
-
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
@@ -173,13 +162,29 @@ class SkillManager:
                 and children[0].is_dir()
                 and (children[0] / "SKILL.md").exists()
             ):
-                # Move the inner folder directly
-                shutil.move(str(children[0]), str(target_dir))
+                source_dir = children[0]
             else:
-                # Treat root as the skill folder itself
-                shutil.move(str(tmp_path), str(target_dir))
+                source_dir = tmp_path
 
-        return target_dir
+            skill_md_path = source_dir / "SKILL.md"
+            if not skill_md_path.exists():
+                raise FileNotFoundError("SKILL.md not found in the uploaded archive.")
+
+            content = skill_md_path.read_text(encoding="utf-8")
+            m = re.search(r"^name:\s*([^\r\n]+)", content, re.MULTILINE)
+            if not m:
+                raise ValueError("Could not find 'name:' in SKILL.md frontmatter.")
+            skill_name = m.group(1).strip().strip("\"'")
+
+            target_dir = self.skills_dir / skill_name
+            if target_dir.exists():
+                raise FileExistsError(
+                    f"Skill '{skill_name}' already exists. Please delete it first if you want to update."
+                )
+
+            shutil.move(str(source_dir), str(target_dir))
+
+        return target_dir, skill_name
 
     async def _fetch_zip_from_url(self, url: str) -> bytes:
         """Download a zip file from a URL and return its bytes."""
@@ -251,51 +256,62 @@ class SkillManager:
     def _extract_zip_subfolder(
         self,
         zip_bytes: bytes,
-        unique_name: str,
         subpath: str,
         repo_zip_root: str,
-    ) -> Path:
-        """Extract a specific subfolder from a repo zip into SKILLS_DIR.
-
-        GitHub archives have a top-level folder like ``{repo}-{branch}/``.
-        We strip that prefix and then extract only the files under ``subpath``.
+    ) -> Tuple[Path, str]:
+        """Extract a specific subfolder from a repo zip into SKILLS_DIR/<skill_name>.
 
         Args:
             zip_bytes:     Raw bytes of the GitHub repo zip.
-            unique_name:   Destination folder name inside SKILLS_DIR.
             subpath:       Path inside the repo (e.g. '/skills/yahoo_finance').
             repo_zip_root: The root prefix inside the archive (e.g. 'myrepo-main/').
+
+        Returns:
+            Tuple of (skill_directory_path, skill_name).
         """
-        # Strip leading slash and build the full prefix to match inside the zip
         clean_subpath = subpath.lstrip("/").rstrip("/")
         prefix = f"{repo_zip_root}{clean_subpath}/"
 
-        target_dir = self.skills_dir / unique_name
-        if target_dir.exists():
-            shutil.rmtree(target_dir)
-        target_dir.mkdir(parents=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            target_dir_tmp = Path(tmp) / "extracted"
+            target_dir_tmp.mkdir()
 
-        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            matched = [n for n in zf.namelist() if n.startswith(prefix)]
-            if not matched:
-                raise FileNotFoundError(
-                    f"Subpath '{clean_subpath}' not found inside the GitHub archive. "
-                    f"Available top-level entries: "
-                    + ", ".join({n.split("/")[1] for n in zf.namelist() if "/" in n})
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                matched = [n for n in zf.namelist() if n.startswith(prefix)]
+                if not matched:
+                    raise FileNotFoundError(
+                        f"Subpath '{clean_subpath}' not found inside the GitHub archive."
+                    )
+                for member in matched:
+                    relative = member[len(prefix):]
+                    if not relative:
+                        continue
+                    dest = target_dir_tmp / relative
+                    if member.endswith("/"):
+                        dest.mkdir(parents=True, exist_ok=True)
+                    else:
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        dest.write_bytes(zf.read(member))
+
+            skill_md_path = target_dir_tmp / "SKILL.md"
+            if not skill_md_path.exists():
+                raise FileNotFoundError("SKILL.md not found in the downloaded skill folder.")
+
+            content = skill_md_path.read_text(encoding="utf-8")
+            m = re.search(r"^name:\s*([^\r\n]+)", content, re.MULTILINE)
+            if not m:
+                raise ValueError("Could not find 'name:' in SKILL.md frontmatter.")
+            skill_name = m.group(1).strip().strip("\"'")
+
+            target_dir = self.skills_dir / skill_name
+            if target_dir.exists():
+                raise FileExistsError(
+                    f"Skill '{skill_name}' already exists. Please delete it first if you want to update."
                 )
-            for member in matched:
-                # Strip the archive prefix so files land at target_dir root
-                relative = member[len(prefix):]
-                if not relative:  # skip the directory entry itself
-                    continue
-                dest = target_dir / relative
-                if member.endswith("/"):
-                    dest.mkdir(parents=True, exist_ok=True)
-                else:
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    dest.write_bytes(zf.read(member))
 
-        return target_dir
+            shutil.move(str(target_dir_tmp), str(target_dir))
+
+        return target_dir, skill_name
 
     # ------------------------------------------------------------------
     # Public CRUD operations
@@ -303,23 +319,24 @@ class SkillManager:
 
     async def install_skill(
         self,
-        unique_name: str,
         url: Optional[str] = None,
         zip_base64: Optional[str] = None,
-    ) -> Path:
+    ) -> Tuple[Path, str]:
         """Install a skill from a URL, GitHub link, or base64-encoded zip.
 
+        Extracts the skill name from the `SKILL.md` file.
+
         Args:
-            unique_name: The folder name to use inside SKILLS_DIR.
             url:         Remote URL of the .zip archive **or** a GitHub repo/folder URL.
                          GitHub URLs (github.com/…) are resolved automatically.
             zip_base64:  Base64-encoded .zip bytes.
 
         Returns:
-            Path to the installed skill directory.
+            Tuple of (Path_to_skill, skill_name).
 
         Raises:
             ValueError:  If neither url nor zip_base64 is provided.
+            FileExistsError: If a skill with the parsed name already exists.
             RuntimeError: If the download or extraction fails.
         """
         if url:
@@ -328,25 +345,24 @@ class SkillManager:
                 zip_bytes, subpath = await self._fetch_github_skill(url)
                 if subpath:
                     # Determine the root folder name inside the GitHub archive
-                    # (GitHub names it "{repo}-{branch}/")
                     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
                         repo_zip_root = zf.namelist()[0].split("/")[0] + "/"
-                    skill_path = self._extract_zip_subfolder(
-                        zip_bytes, unique_name, subpath, repo_zip_root
+                    skill_path, skill_name = self._extract_zip_subfolder(
+                        zip_bytes, subpath, repo_zip_root
                     )
                 else:
-                    skill_path = self._extract_zip_to_skills_dir(zip_bytes, unique_name)
+                    skill_path, skill_name = self._extract_zip_to_skills_dir(zip_bytes)
             else:
                 zip_bytes = await self._fetch_zip_from_url(url)
-                skill_path = self._extract_zip_to_skills_dir(zip_bytes, unique_name)
+                skill_path, skill_name = self._extract_zip_to_skills_dir(zip_bytes)
         elif zip_base64:
             zip_bytes = base64.b64decode(zip_base64)
-            skill_path = self._extract_zip_to_skills_dir(zip_bytes, unique_name)
+            skill_path, skill_name = self._extract_zip_to_skills_dir(zip_bytes)
         else:
             raise ValueError("Either 'url' or 'zip_base64' must be provided.")
 
         self.reload()
-        return skill_path
+        return skill_path, skill_name
 
     def delete_skill(self, unique_name: str) -> bool:
         """Remove a skill directory from SKILLS_DIR.
