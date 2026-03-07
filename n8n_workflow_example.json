@@ -1,0 +1,625 @@
+{
+    "name": "Workflow with Skill MCP Server Example",
+    "nodes": [
+        {
+            "parameters": {
+                "options": {
+                    "systemMessage": "=You are a helpful assistant\n\n{{ $json.skills_prompt }}",
+                    "enableStreaming": true
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 3.1,
+            "position": [
+                -320,
+                -80
+            ],
+            "id": "a5d630bb-7f22-474b-b45a-22c5bdb2cb73",
+            "name": "AI Agent"
+        },
+        {
+            "parameters": {
+                "model": {
+                    "__rl": true,
+                    "mode": "list",
+                    "value": "gpt-5-mini"
+                },
+                "builtInTools": {},
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+            "typeVersion": 1.3,
+            "position": [
+                -512,
+                128
+            ],
+            "id": "00ff82e9-d6fa-43fb-b656-6e401c31d19c",
+            "name": "OpenAI Chat Model",
+            "credentials": {
+                "openAiApi": {
+                    "id": "4diwFGS8vol15HXc",
+                    "name": "OpenAi account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "sessionIdType": "customKey",
+                "sessionKey": "=SESS:{{ $json.sessionId || 123 }}"
+            },
+            "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
+            "typeVersion": 1.5,
+            "position": [
+                -352,
+                128
+            ],
+            "id": "935410be-d64e-4275-902b-10676b9b8de5",
+            "name": "Redis Chat Memory",
+            "credentials": {
+                "redis": {
+                    "id": "6SZUXgRUGgA9zdly",
+                    "name": "Redis account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "toolDescription": "Install new skill based on URL",
+                "method": "POST",
+                "url": "=http://localhost:8000/skills",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "=url",
+                            "value": "={{ $fromAI('skill_url', `Skill URL`, 'string') }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequestTool",
+            "typeVersion": 4.4,
+            "position": [
+                -224,
+                128
+            ],
+            "id": "0d98cade-e0dc-43d3-9e8a-0eeadb4178b4",
+            "name": "Add Skill",
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "BmqkrfxxTuGUP8Zn",
+                    "name": "X-Api-Skills-MCP-Server"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "endpointUrl": "http://localhost:8000/mcp",
+                "authentication": "headerAuth",
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+            "typeVersion": 1.2,
+            "position": [
+                -96,
+                128
+            ],
+            "id": "f63f22e2-0502-40e6-93c2-1f690e28e513",
+            "name": "Skills MCP Server",
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "BmqkrfxxTuGUP8Zn",
+                    "name": "X-Api-Skills-MCP-Server"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "**1. Using workflow variable as skill prompt cache**(best performance)\n\nLOAD SKILLS PROMPT",
+                "height": 368,
+                "width": 1008,
+                "color": 5
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                -848,
+                -544
+            ],
+            "typeVersion": 1,
+            "id": "f1d50f1e-c48b-479b-8cce-81aa35b38254",
+            "name": "Sticky Note"
+        },
+        {
+            "parameters": {
+                "events": [
+                    "update",
+                    "init",
+                    "activate"
+                ]
+            },
+            "type": "n8n-nodes-base.n8nTrigger",
+            "typeVersion": 1,
+            "position": [
+                -784,
+                -400
+            ],
+            "id": "7fd9dfe7-d26e-4754-b9bc-5e06ca1c6b14",
+            "name": "Any Workflow update"
+        },
+        {
+            "parameters": {
+                "url": "http://localhost:8000/skills/prompt_snippet",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "text",
+                            "outputPropertyName": "prompt"
+                        }
+                    }
+                }
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                -416,
+                -400
+            ],
+            "id": "632d3cb0-dd68-4ae9-945d-aec164502cfc",
+            "name": "Recover Skills prompt",
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "BmqkrfxxTuGUP8Zn",
+                    "name": "X-Api-Skills-MCP-Server"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.skills_prompt = $json.prompt\n\n\n$input.item.json.skills_prompt = staticData.skills_prompt || \"\";\n$input.item.json.prompt = undefined;\nreturn $input.item;"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -64,
+                -400
+            ],
+            "id": "dc87a543-6b74-4be2-804e-4bca6363d575",
+            "name": "Save on workflow"
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "jsCode": "// Add a new field called 'myNewField' to the JSON of the item\n\nconst staticData = $getWorkflowStaticData('global');\n\n\n$input.item.json.skills_prompt = staticData.skills_prompt || \"\";\n\nreturn $input.item;"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -576,
+                -80
+            ],
+            "id": "451c15b1-3c87-484f-a472-024e1e83d66b",
+            "name": "Use Skills prompt"
+        },
+        {
+            "parameters": {
+                "description": "Call this tool to update skills list, after add, change or remove a skill.",
+                "workflowId": {
+                    "__rl": true,
+                    "value": "6muEUNL3KpQuyC6Q",
+                    "mode": "id",
+                    "cachedResultUrl": "/workflow/6muEUNL3KpQuyC6Q"
+                },
+                "workflowInputs": {
+                    "mappingMode": "defineBelow",
+                    "value": {},
+                    "matchingColumns": [],
+                    "schema": [],
+                    "attemptToConvertTypes": false,
+                    "convertFieldsToString": false
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+            "typeVersion": 2.2,
+            "position": [
+                48,
+                128
+            ],
+            "id": "01a33d88-add1-4e2d-9a19-5df2b3046a4d",
+            "name": "Update cache and retrieve skills"
+        },
+        {
+            "parameters": {
+                "content": "## Instructions\n* First install Skills MCP Server [from here](https://github.com/chameleonbr/skills_mcp_server).\n* Run Skills MCP Server http://localhost:8000\n* Install skills using REST API (POST /skills)\n* Run chat and it will use all skills installed on Skill MCP Server\n\nLook OpenAPI from skills MCP Server on /docs\n\nThanks \nby Avila",
+                "height": 368,
+                "width": 464,
+                "color": 7
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                176,
+                -544
+            ],
+            "typeVersion": 1,
+            "id": "2684262a-a159-4eb9-8e31-94e6463bef2d",
+            "name": "Sticky Note1"
+        },
+        {
+            "parameters": {
+                "content": "**1. Using workflow variable as skill prompt cache**(best performance)\n\nRUN AGENT",
+                "height": 416,
+                "width": 1008,
+                "color": 4
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                -848,
+                -144
+            ],
+            "typeVersion": 1,
+            "id": "7aea5f3c-3e4c-4a3c-bcdb-26458ce5efc9",
+            "name": "Sticky Note2"
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $('Input').item.json.chatInput }}",
+                "options": {
+                    "systemMessage": "=You are a helpful assistant\n\n{{ $json.skills_prompt }}",
+                    "enableStreaming": true
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 3.1,
+            "position": [
+                -256,
+                336
+            ],
+            "id": "bc050187-6774-4658-8a92-b98ae23b5085",
+            "name": "AI Agent1"
+        },
+        {
+            "parameters": {
+                "model": {
+                    "__rl": true,
+                    "mode": "list",
+                    "value": "gpt-5-mini"
+                },
+                "builtInTools": {},
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+            "typeVersion": 1.3,
+            "position": [
+                -336,
+                576
+            ],
+            "id": "1150d76d-649e-498b-a5d0-e4fb23bbeba7",
+            "name": "OpenAI Chat Model1",
+            "credentials": {
+                "openAiApi": {
+                    "id": "4diwFGS8vol15HXc",
+                    "name": "OpenAi account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "sessionIdType": "customKey",
+                "sessionKey": "=SESS:{{ $('Input').item.json.sessionId || 123 }}",
+                "sessionTTL": 3600
+            },
+            "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
+            "typeVersion": 1.5,
+            "position": [
+                -160,
+                576
+            ],
+            "id": "c789bcf6-8e31-4aa5-bfc6-ecfd8dcf87d4",
+            "name": "Redis Chat Memory1",
+            "credentials": {
+                "redis": {
+                    "id": "6SZUXgRUGgA9zdly",
+                    "name": "Redis account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "endpointUrl": "http://localhost:8000/mcp",
+                "authentication": "headerAuth",
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+            "typeVersion": 1.2,
+            "position": [
+                16,
+                576
+            ],
+            "id": "5875e7b0-1f93-468e-a504-462431838b6a",
+            "name": "Skills MCP Server1",
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "BmqkrfxxTuGUP8Zn",
+                    "name": "X-Api-Skills-MCP-Server"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "**2. Loading prompt skills in every request**\n\nJUST RUN AGENT",
+                "height": 432,
+                "width": 1008
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                -848,
+                304
+            ],
+            "typeVersion": 1,
+            "id": "d3228210-1d2c-422b-ba70-9e806eae977a",
+            "name": "Sticky Note3"
+        },
+        {
+            "parameters": {
+                "url": "http://localhost:8000/skills/prompt_snippet",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "text",
+                            "outputPropertyName": "skills_prompt"
+                        }
+                    }
+                }
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                -560,
+                400
+            ],
+            "id": "b7b0749e-446c-4fcb-aa66-d7bba601d837",
+            "name": "Recover Skills prompt when receive msg",
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "BmqkrfxxTuGUP8Zn",
+                    "name": "X-Api-Skills-MCP-Server"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "## Recover Skills Prompt",
+                "height": 240,
+                "width": 288,
+                "color": 3
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                -512,
+                -464
+            ],
+            "typeVersion": 1,
+            "id": "47d4a9e0-96b6-46f0-b26a-b18e301842b8",
+            "name": "Sticky Note4"
+        },
+        {
+            "parameters": {
+                "content": "## Recover Skills Prompt",
+                "height": 240,
+                "width": 288,
+                "color": 3
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                -656,
+                336
+            ],
+            "typeVersion": 1,
+            "id": "5551c840-dc6c-4e12-89c7-f85753c91375",
+            "name": "Sticky Note5"
+        },
+        {
+            "parameters": {
+                "content": "**Choose only one way**",
+                "height": 80,
+                "width": 176,
+                "color": 6
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "position": [
+                -1184,
+                240
+            ],
+            "typeVersion": 1,
+            "id": "3c592b99-f7c5-4e0f-90c6-1630e133ab6e",
+            "name": "Sticky Note6"
+        },
+        {
+            "parameters": {
+                "public": true,
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+            "typeVersion": 1.4,
+            "position": [
+                -1296,
+                240
+            ],
+            "id": "dbe95458-cc60-4d08-b3d8-f693efa954b5",
+            "name": "Input",
+            "webhookId": "fbdeb19d-61fe-4f77-8474-3dae3aec90ed"
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "OpenAI Chat Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Redis Chat Memory": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Add Skill": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Skills MCP Server": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Any Workflow update": {
+            "main": [
+                [
+                    {
+                        "node": "Recover Skills prompt",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Recover Skills prompt": {
+            "main": [
+                [
+                    {
+                        "node": "Save on workflow",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Use Skills prompt": {
+            "main": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Update cache and retrieve skills": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "OpenAI Chat Model1": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Redis Chat Memory1": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Skills MCP Server1": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Recover Skills prompt when receive msg": {
+            "main": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Input": {
+            "main": [
+                [
+                    {
+                        "node": "Use Skills prompt",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Recover Skills prompt when receive msg",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": true,
+    "settings": {
+        "executionOrder": "v1",
+        "binaryMode": "separate",
+        "availableInMCP": false
+    },
+    "versionId": "8d7bac6b-b7ec-419b-8726-f4fd2f4e1d13",
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "8dc5cb6fb82767892f6155cf77afd063b903f12235e89bb79eb5f5dad7399ba5"
+    },
+    "id": "6muEUNL3KpQuyC6Q",
+    "tags": []
+}
