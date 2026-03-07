@@ -44,7 +44,7 @@ def create_mcp_server(get_manager: Callable[[], SkillManager]) -> FastMCP:
 
     @mcp.tool
     def get_available_skills() -> str:
-        """Return a list of all currently loaded skills with their name and description.
+        """Return a list of all skills with their name and description.
 
         Call this first to discover which skills are available before invoking
         any other skill tool.
@@ -120,5 +120,28 @@ def create_mcp_server(get_manager: Callable[[], SkillManager]) -> FastMCP:
             execute,
         )
         return get_manager().mcp_get_script(skill_name, script_path, execute=execute)
+
+    # -----------------------------------------------------------------------
+    # Prompt: prompt_snippet
+    # -----------------------------------------------------------------------
+
+    @mcp.prompt()
+    def prompt_snippet() -> list[dict]:
+        """Get the system prompt snippet for agents.
+        
+        The snippet contains XML-formatted metadata for all loaded skills,
+        including their names, descriptions, available scripts, and references.
+        """
+        logger.debug("MCP prompt: prompt_snippet")
+        snippet = get_manager().get_system_prompt_snippet()
+        return [
+            {
+                "role": "user",
+                "content": {
+                    "type": "text",
+                    "text": snippet
+                }
+            }
+        ]
 
     return mcp

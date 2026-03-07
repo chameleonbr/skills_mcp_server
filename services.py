@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 from agno.skills.agent_skills import Skills
@@ -144,47 +144,163 @@ class SkillManager:
     # Skill installation helpers
     # ------------------------------------------------------------------
 
-    def _extract_zip_to_skills_dir(self, zip_bytes: bytes) -> Tuple[Path, str]:
-        """Extract a zip archive into SKILLS_DIR/<skill_name>.
+    async def _install_from_index(self, url: str) -> List[str]:
+        """Fetch and install skills defined in a Cloudflare RFC skills_index.json.
 
-        Reads `SKILL.md` to determine the `<skill_name>`.
-        Returns a tuple of (skill_directory_path, skill_name).
+        Args:
+            url: URL to the `skills_index.json` file.
+
+        Returns:
+            A list of installed skill names.
+            
+        Raises:
+            ValueError: If the JSON format is invalid.
+            FileExistsError: If one of the skills already exists locally.
         """
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-                zf.extractall(tmp_path)
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            resp = await client.get(url, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
 
-            # Detect layout: single folder at root (common convention)
-            children = [c for c in tmp_path.iterdir()]
-            if (
-                len(children) == 1
-                and children[0].is_dir()
-                and (children[0] / "SKILL.md").exists()
-            ):
-                source_dir = children[0]
-            else:
-                source_dir = tmp_path
+        skills = data.get("skills")
+        if not isinstance(skills, list):
+            raise ValueError("index.json must contain a 'skills' array.")
 
-            skill_md_path = source_dir / "SKILL.md"
-            if not skill_md_path.exists():
-                raise FileNotFoundError("SKILL.md not found in the uploaded archive.")
+        def _get_all_file_paths(f_obj) -> List[str]:
+            if isinstance(f_obj, str):
+                return [f_obj]
+            elif isinstance(f_obj, list):
+                res = []
+                for x in f_obj:
+                    res.extend(_get_all_file_paths(x))
+                return res
+            elif isinstance(f_obj, dict):
+                res = []
+                for v in f_obj.values():
+                    res.extend(_get_all_file_paths(v))
+                return res
+            return []
 
-            content = skill_md_path.read_text(encoding="utf-8")
-            m = re.search(r"^name:\s*([^\r\n]+)", content, re.MULTILINE)
-            if not m:
-                raise ValueError("Could not find 'name:' in SKILL.md frontmatter.")
-            skill_name = m.group(1).strip().strip("\"'")
+        installed_names = []
+        base_url = url.rsplit("/", 1)[0]
 
-            target_dir = self.skills_dir / skill_name
-            if target_dir.exists():
+        for skill_def in skills:
+            name = skill_def.get("name")
+            raw_files = skill_def.get("files", [])
+            file_paths = _get_all_file_paths(raw_files)
+            
+            if not name or not file_paths:
+                continue
+                
+            skill_dir = self.skills_dir / name
+            if skill_dir.exists():
                 raise FileExistsError(
-                    f"Skill '{skill_name}' already exists. Please delete it first if you want to update."
+                    f"Skill '{name}' already exists. Please delete it first."
                 )
 
-            shutil.move(str(source_dir), str(target_dir))
+            # Download files to a temp directory first to ensure atomic install
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_path = Path(tmp)
+                for file_path in file_paths:
+                    file_url = f"{base_url}/{file_path.lstrip('/')}"
+                    async with httpx.AsyncClient(follow_redirects=True) as client:
+                        file_resp = await client.get(file_url, timeout=30)
+                        file_resp.raise_for_status()
+                        
+                    dest = tmp_path / file_path.lstrip('/')
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(file_resp.content)
+                
+                # Locate SKILL.md dynamically
+                skill_md_files = list(tmp_path.rglob("SKILL.md"))
+                if not skill_md_files:
+                    raise FileNotFoundError(f"SKILL.md not found in downloaded index for '{name}'.")
+                    
+                skill_md_path = skill_md_files[0]
+                source_dir = skill_md_path.parent
+                
+                content = skill_md_path.read_text(encoding="utf-8")
+                m = re.search(r"^name:\s*([^\r\n]+)", content, re.MULTILINE)
+                if not m:
+                    raise ValueError(f"Could not find 'name:' in SKILL.md frontmatter for '{name}'.")
+                
+                parsed_name = m.group(1).strip().strip("\"'")
+                if parsed_name != name:
+                    logger.warning("Index name '%s' differs from SKILL.md name '%s'", name, parsed_name)
 
-        return target_dir, skill_name
+                shutil.move(str(source_dir), str(skill_dir))
+                installed_names.append(parsed_name)
+
+        return installed_names
+
+    def _extract_and_install_skills(
+        self,
+        zip_bytes: bytes,
+        subpath: Optional[str] = None,
+        repo_zip_root: Optional[str] = None,
+    ) -> List[str]:
+        """Extract a zip archive and recursively install all found skills.
+
+        Args:
+            zip_bytes:     Raw zip bytes.
+            subpath:       Optional github repo subpath (e.g. '/skills').
+            repo_zip_root: Optional prefix for github repos (e.g. 'myrepo-main/').
+
+        Returns:
+            A list of installed skill names.
+        """
+        prefix = ""
+        if subpath and repo_zip_root:
+            clean_subpath = subpath.lstrip("/").rstrip("/")
+            prefix = f"{repo_zip_root}{clean_subpath}/"
+            
+        installed_names = []
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                if prefix:
+                    matched = [n for n in zf.namelist() if n.startswith(prefix)]
+                    if not matched:
+                        raise FileNotFoundError(f"Subpath '{subpath}' not found inside archive.")
+                    for member in matched:
+                        relative = member[len(prefix):]
+                        if not relative:
+                            continue
+                        dest = tmp_path / relative
+                        if member.endswith("/"):
+                            dest.mkdir(parents=True, exist_ok=True)
+                        else:
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            dest.write_bytes(zf.read(member))
+                else:
+                    zf.extractall(tmp_path)
+
+            # Recursively find all SKILL.md files
+            skill_md_files = list(tmp_path.rglob("SKILL.md"))
+            if not skill_md_files:
+                raise FileNotFoundError("No SKILL.md found in the uploaded archive.")
+
+            for skill_md_path in skill_md_files:
+                source_dir = skill_md_path.parent
+                content = skill_md_path.read_text(encoding="utf-8")
+                
+                m = re.search(r"^name:\s*([^\r\n]+)", content, re.MULTILINE)
+                if not m:
+                    raise ValueError(f"Could not find 'name:' in {skill_md_path} frontmatter.")
+                
+                skill_name = m.group(1).strip().strip("\"'")
+                target_dir = self.skills_dir / skill_name
+                
+                if target_dir.exists():
+                    raise FileExistsError(
+                        f"Skill '{skill_name}' already exists. Please delete it first."
+                    )
+                    
+                shutil.move(str(source_dir), str(target_dir))
+                installed_names.append(skill_name)
+
+        return installed_names
 
     async def _fetch_zip_from_url(self, url: str) -> bytes:
         """Download a zip file from a URL and return its bytes."""
@@ -253,65 +369,7 @@ class SkillManager:
         zip_bytes = await self._fetch_zip_from_url(zip_url)
         return zip_bytes, subpath
 
-    def _extract_zip_subfolder(
-        self,
-        zip_bytes: bytes,
-        subpath: str,
-        repo_zip_root: str,
-    ) -> Tuple[Path, str]:
-        """Extract a specific subfolder from a repo zip into SKILLS_DIR/<skill_name>.
 
-        Args:
-            zip_bytes:     Raw bytes of the GitHub repo zip.
-            subpath:       Path inside the repo (e.g. '/skills/yahoo_finance').
-            repo_zip_root: The root prefix inside the archive (e.g. 'myrepo-main/').
-
-        Returns:
-            Tuple of (skill_directory_path, skill_name).
-        """
-        clean_subpath = subpath.lstrip("/").rstrip("/")
-        prefix = f"{repo_zip_root}{clean_subpath}/"
-
-        with tempfile.TemporaryDirectory() as tmp:
-            target_dir_tmp = Path(tmp) / "extracted"
-            target_dir_tmp.mkdir()
-
-            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-                matched = [n for n in zf.namelist() if n.startswith(prefix)]
-                if not matched:
-                    raise FileNotFoundError(
-                        f"Subpath '{clean_subpath}' not found inside the GitHub archive."
-                    )
-                for member in matched:
-                    relative = member[len(prefix):]
-                    if not relative:
-                        continue
-                    dest = target_dir_tmp / relative
-                    if member.endswith("/"):
-                        dest.mkdir(parents=True, exist_ok=True)
-                    else:
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        dest.write_bytes(zf.read(member))
-
-            skill_md_path = target_dir_tmp / "SKILL.md"
-            if not skill_md_path.exists():
-                raise FileNotFoundError("SKILL.md not found in the downloaded skill folder.")
-
-            content = skill_md_path.read_text(encoding="utf-8")
-            m = re.search(r"^name:\s*([^\r\n]+)", content, re.MULTILINE)
-            if not m:
-                raise ValueError("Could not find 'name:' in SKILL.md frontmatter.")
-            skill_name = m.group(1).strip().strip("\"'")
-
-            target_dir = self.skills_dir / skill_name
-            if target_dir.exists():
-                raise FileExistsError(
-                    f"Skill '{skill_name}' already exists. Please delete it first if you want to update."
-                )
-
-            shutil.move(str(target_dir_tmp), str(target_dir))
-
-        return target_dir, skill_name
 
     # ------------------------------------------------------------------
     # Public CRUD operations
@@ -321,18 +379,17 @@ class SkillManager:
         self,
         url: Optional[str] = None,
         zip_base64: Optional[str] = None,
-    ) -> Tuple[Path, str]:
-        """Install a skill from a URL, GitHub link, or base64-encoded zip.
+    ) -> List[str]:
+        """Install one or more skills from a URL, GitHub link, base64 encoded zip, or Discovery JSON.
 
-        Extracts the skill name from the `SKILL.md` file.
+        Extracts the skill names from the `SKILL.md` files.
 
         Args:
-            url:         Remote URL of the .zip archive **or** a GitHub repo/folder URL.
-                         GitHub URLs (github.com/…) are resolved automatically.
+            url:         Remote URL of the .zip archive, GitHub repo/folder URL, or skills_index.json.
             zip_base64:  Base64-encoded .zip bytes.
 
         Returns:
-            Tuple of (Path_to_skill, skill_name).
+            List of installed skill names.
 
         Raises:
             ValueError:  If neither url nor zip_base64 is provided.
@@ -340,29 +397,33 @@ class SkillManager:
             RuntimeError: If the download or extraction fails.
         """
         if url:
-            # Detect GitHub URLs and handle them specially
-            if self._parse_github_url(url) is not None:
+            # Convert GitHub repo blob URLs to raw content URLs so files can be fetched directly
+            if url.startswith("https://github.com/") and "/blob/" in url:
+                url = url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/")
+
+            if url.endswith(".json"):
+                installed_names = await self._install_from_index(url)
+            elif self._parse_github_url(url) is not None:
                 zip_bytes, subpath = await self._fetch_github_skill(url)
                 if subpath:
-                    # Determine the root folder name inside the GitHub archive
                     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
                         repo_zip_root = zf.namelist()[0].split("/")[0] + "/"
-                    skill_path, skill_name = self._extract_zip_subfolder(
-                        zip_bytes, subpath, repo_zip_root
+                    installed_names = self._extract_and_install_skills(
+                        zip_bytes, subpath=subpath, repo_zip_root=repo_zip_root
                     )
                 else:
-                    skill_path, skill_name = self._extract_zip_to_skills_dir(zip_bytes)
+                    installed_names = self._extract_and_install_skills(zip_bytes)
             else:
                 zip_bytes = await self._fetch_zip_from_url(url)
-                skill_path, skill_name = self._extract_zip_to_skills_dir(zip_bytes)
+                installed_names = self._extract_and_install_skills(zip_bytes)
         elif zip_base64:
             zip_bytes = base64.b64decode(zip_base64)
-            skill_path, skill_name = self._extract_zip_to_skills_dir(zip_bytes)
+            installed_names = self._extract_and_install_skills(zip_bytes)
         else:
             raise ValueError("Either 'url' or 'zip_base64' must be provided.")
 
         self.reload()
-        return skill_path, skill_name
+        return installed_names
 
     def delete_skill(self, unique_name: str) -> bool:
         """Remove a skill directory from SKILLS_DIR.
@@ -400,3 +461,31 @@ class SkillManager:
     ) -> str:
         """Delegate to Agno's _get_skill_script."""
         return self.agno._get_skill_script(skill_name, script_path, execute=execute)
+
+    def get_system_prompt_snippet(self, skill_list: Optional[List[str]] = None) -> str:
+        """Generate a system prompt snippet filtered by an optional blocklist/allowlist.
+        
+        Args:
+            skill_list: Optional list of skill names to include. If provided, only these will be returned.
+            
+        Returns:
+            XML-formatted snippet string.
+        """
+        if skill_list is None:
+            return self.agno.get_system_prompt_snippet()
+            
+        logger.info(f"Filtering skills to: {skill_list}")
+        # Create a disposable Skills instance to reliably format the snippet
+        # only including the skills requested
+        filtered_agno = Skills(loaders=[])
+        
+        # Manually populate its internal dictionary from our fully loaded one
+        for skill_name in skill_list:
+            clean_name = skill_name.strip()
+            skill_obj = self.agno.get_skill(clean_name)
+            logger.info(f"Looking for skill '{clean_name}': Found={skill_obj is not None}")
+            if skill_obj:
+                filtered_agno._skills[clean_name] = skill_obj
+                
+        logger.info(f"Filtered dictionary has keys: {list(filtered_agno._skills.keys())}")
+        return filtered_agno.get_system_prompt_snippet()

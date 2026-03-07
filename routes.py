@@ -1,7 +1,7 @@
 import logging
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Security, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Security, UploadFile, status
 from fastapi.security import APIKeyHeader
 
 from models import (
@@ -67,6 +67,9 @@ def list_skills(
     """Return a summary list of every currently loaded skill."""
     return manager.list_skills()
 
+from typing import Annotated, Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Security, UploadFile, status
 
 @router.get(
     "/prompt_snippet",
@@ -75,6 +78,10 @@ def list_skills(
 )
 def prompt_snippet(
     manager: Annotated[SkillManager, Depends(get_skill_manager)],
+    skill_list: Optional[str] = Query(
+        None,
+        description="Optional comma-separated list of skill names to include in the snippet.",
+    ),
 ) -> str:
     """Return the Agno system prompt snippet ready to be included in any agent.
 
@@ -82,7 +89,8 @@ def prompt_snippet(
     including their names, descriptions, available scripts, and references.
     Paste this into your agent's system prompt to enable skill discovery.
     """
-    return manager.agno.get_system_prompt_snippet()
+    skill_names = [s.strip() for s in skill_list.split(",")] if skill_list else None
+    return manager.get_system_prompt_snippet(skill_names)
 
 
 @router.get(
@@ -125,13 +133,13 @@ async def add_skill(
             detail="Either 'url' or 'zip_base64' must be provided.",
         )
     try:
-        path, skill_name = await manager.install_skill(
+        installed_skills = await manager.install_skill(
             url=body.url,
             zip_base64=body.zip_base64,
         )
         return InstallResponse(
-            message=f"Skill '{skill_name}' installed at {path}.",
-            skill_name=skill_name,
+            message=f"Successfully installed {len(installed_skills)} skill(s).",
+            installed_skills=installed_skills,
         )
     except FileExistsError as e:
         raise HTTPException(
@@ -168,11 +176,11 @@ async def upload_skill(
         )
     try:
         zip_bytes = await file.read()
-        path, skill_name = manager._extract_zip_to_skills_dir(zip_bytes)
+        installed_skills = manager._extract_and_install_skills(zip_bytes)
         manager.reload()
         return InstallResponse(
-            message=f"Skill '{skill_name}' installed at {path}.",
-            skill_name=skill_name,
+            message=f"Successfully installed {len(installed_skills)} skill(s).",
+            installed_skills=installed_skills,
         )
     except FileExistsError as e:
         raise HTTPException(

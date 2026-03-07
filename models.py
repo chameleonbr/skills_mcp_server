@@ -65,10 +65,10 @@ class MessageResponse(BaseModel):
 
 
 class InstallResponse(BaseModel):
-    """Response returned when a skill is successfully installed."""
+    """Response returned when skills are successfully installed."""
 
     message: str
-    skill_name: str
+    installed_skills: List[str]
 
 
 class ErrorResponse(BaseModel):
