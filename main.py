@@ -145,7 +145,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Skills MCP Server",
     description=(
-        "A centralized MCP server for managing and executing Agno agent skills.\n\n"
+        "A centralized MCP server for managing, using and executing agent skills.\n\n"
         "- **REST control plane** (`/skills`): install, update, list, delete skills.\n"
         "- **MCP endpoint** (`/mcp`): StreamableHTTP transport for MCP clients."
     ),
