@@ -19,7 +19,8 @@ The `skills_mcp_server` acts as a dual-interface system:
 * **🧠 Agno Integration:** Leverages the Agno framework to provide rich, fully-fledged agent skills to your AI models.
 * **📦 Dynamic Installation:** Install new skills at runtime via `.zip` upload, direct download URL, or a **GitHub repository URL**.
 * **🐙 GitHub Support:** Point to any GitHub repo or subdirectory and the server downloads and installs the skill automatically.
-* **🔑 Secured Access:** API Key authentication (`X-API-Key` header) protects all management routes.
+* **☁️ S3 Storage:** Optionally store and load skills from an S3-compatible bucket (AWS S3, MinIO, LocalStack) via `SKILLS_STORAGE=s3`.
+* **🔑 Secured Access:** API Key authentication (`X-API-Key` header) protects **all** routes including the MCP endpoint.
 * **📡 MCP + REST:** A single process serves both the REST control plane and the MCP endpoint (`/mcp`).
 
 ---
@@ -73,6 +74,7 @@ skills_mcp_server/
 ├── services.py      # SkillManager (install, delete, reload, GitHub support)
 ├── mcp_server.py    # FastMCP server with Agno skill tools
 ├── models.py        # Pydantic request/response schemas
+├── s3_skills.py     # S3Skills loader (sync from S3 bucket → LocalSkills)
 ├── skills/          # Skill folders (each must contain SKILL.md)
 ├── pyproject.toml
 └── Dockerfile / docker-compose.yml
@@ -251,7 +253,70 @@ Use this skill when the user asks about stock prices or financial data...
 
 ## ⚙️ Environment Variables
 
+### Core
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `API_KEY` | *(required)* | Secret key for REST API authentication |
-| `SKILLS_DIR` | `skills` | Path to the directory containing skill folders |
+| `API_KEY` | *(required)* | Secret key for REST API and MCP authentication |
+| `SKILLS_DIR` | `skills` | Local directory for skill folders (used by `local` backend) |
+| `SKILLS_STORAGE` | `local` | Storage backend: `local` or `s3` |
+
+### S3 Storage (`SKILLS_STORAGE=s3`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `S3_BUCKET` | *(required)* | S3 bucket name |
+| `S3_PREFIX` | `skills/` | Key prefix acting as the remote skills root |
+| `S3_CACHE_DIR` | `.s3cache` | Local directory where S3 files are cached |
+| `AWS_ACCESS_KEY_ID` | — | AWS access key (or use IAM role / `~/.aws/credentials`) |
+| `AWS_SECRET_ACCESS_KEY` | — | AWS secret key |
+| `AWS_DEFAULT_REGION` | `us-east-1` | AWS region |
+| `AWS_ENDPOINT_URL` | — | Custom endpoint for MinIO / LocalStack |
+
+---
+
+## ☁️ Storage Backends
+
+### Local (default)
+
+Skills are loaded from the `SKILLS_DIR` folder on disk.
+With Docker, a named volume (`skills_data`) is used for persistence:
+
+```bash
+# .env
+SKILLS_STORAGE=local
+SKILLS_DIR=skills
+```
+
+The `docker-compose.yml` mounts `skills_data:/app/skills` automatically —
+skills survive `docker-compose down` / `up` cycles.
+
+### S3 / S3-compatible
+
+Skills are synced from an S3 bucket to a local cache dir on every `reload()`.
+The `S3Skills` loader (`s3_skills.py`) follows the same `SkillLoader` interface as Agno's `LocalSkills`.
+
+```bash
+# .env
+SKILLS_STORAGE=s3
+S3_BUCKET=my-bucket
+S3_PREFIX=skills/
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_DEFAULT_REGION=us-east-1
+
+# MinIO / LocalStack:
+# AWS_ENDPOINT_URL=http://localhost:9000
+```
+
+Expected bucket layout:
+```
+my-bucket/
+└── skills/
+    ├── my_skill/
+    │   ├── SKILL.md
+    │   ├── scripts/run.py
+    │   └── references/guide.md
+    └── another_skill/
+        └── SKILL.md
+```
