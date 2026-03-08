@@ -137,6 +137,7 @@ Interactive docs available at `http://localhost:8000/docs`.
 | `POST` | `/skills` | Install a skill from URL or base64 zip |
 | `POST` | `/skills/upload` | Install skill(s) via file upload |
 | `DELETE` | `/skills/{name}` | Delete a skill |
+| `DELETE` | `/skills` | Delete all skills |
 | `GET` | `/skills/prompt_snippet` | Get system prompt snippet for agents (supports `?skill_list=skill1,skill2`) |
 
 ### Health Check

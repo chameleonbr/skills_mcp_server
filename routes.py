@@ -213,3 +213,16 @@ def delete_skill(
             detail=f"Skill '{unique_name}' not found.",
         )
     return MessageResponse(message=f"Skill '{unique_name}' deleted successfully.")
+
+
+@router.delete(
+    "",
+    response_model=MessageResponse,
+    summary="Delete all skills",
+)
+def delete_all_skills(
+    manager: Annotated[SkillManager, Depends(get_skill_manager)],
+) -> MessageResponse:
+    """Remove all skills from disk and unload them from the MCP server."""
+    count = manager.delete_all_skills()
+    return MessageResponse(message=f"Successfully deleted {count} skill(s).")

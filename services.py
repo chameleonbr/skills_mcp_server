@@ -444,6 +444,22 @@ class SkillManager:
         self.reload()
         return True
 
+    def delete_all_skills(self) -> int:
+        """Remove all skill directories from SKILLS_DIR.
+
+        Returns:
+            The number of skills that were removed.
+        """
+        count = 0
+        if self.skills_dir.exists():
+            for skill_dir in self.skills_dir.iterdir():
+                if skill_dir.is_dir():
+                    shutil.rmtree(skill_dir)
+                    count += 1
+        if count > 0:
+            self.reload()
+        return count
+
     # ------------------------------------------------------------------
     # MCP delegators (thin wrappers around Agno internals)
     # ------------------------------------------------------------------
