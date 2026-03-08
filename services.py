@@ -218,6 +218,9 @@ class SkillManager:
                 skill_md_files = list(tmp_path.rglob("SKILL.md"))
                 if not skill_md_files:
                     raise FileNotFoundError(f"SKILL.md not found in downloaded index for '{name}'.")
+                
+                # Sort by path length to pick the top-level SKILL.md first
+                skill_md_files.sort(key=lambda p: len(p.parts))
                     
                 skill_md_path = skill_md_files[0]
                 source_dir = skill_md_path.parent
@@ -284,7 +287,13 @@ class SkillManager:
             if not skill_md_files:
                 raise FileNotFoundError("No SKILL.md found in the uploaded archive.")
 
+            # Sort by path length to process top-level skills first
+            skill_md_files.sort(key=lambda p: len(p.parts))
+
             for skill_md_path in skill_md_files:
+                if not skill_md_path.exists():
+                    continue
+
                 source_dir = skill_md_path.parent
                 content = skill_md_path.read_text(encoding="utf-8")
                 
