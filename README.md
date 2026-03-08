@@ -22,6 +22,7 @@ Currently, many popular orchestration frameworks and low-code platforms only sup
 * **🎯 Selective Skill Exposure (Context Optimization):** Install a massive library of skills on the server, but expose only the exact ones a specific agent needs. By tailoring the skill list per agent, you prevent LLM context bloat, save tokens, and drastically improve agent accuracy.
 * **🗄️ Centralized Skill Hub:** Stop scattering custom scripts and functions across different repositories or n8n nodes. Manage your entire organization's AI capabilities in one unified, easily updatable server.
 * **🔒 Sandboxed Execution:** All skills run in an isolated environment. You can safely install third-party community skills without risking the integrity of your host application or primary infrastructure.
+* **📦 Automatic Dependency Isolation:** Skills that include a `requirements.txt` file are automatically provisioned with a dedicated virtual environment using `uv`. This ensures perfect isolation and clean uninstalls without bloating the main server's dependencies.
 * **🧠 Powered by Agno:** Go beyond simple tools. Leverage Agno to build rich, stateful agent skills that can handle complex multi-step reasoning before returning the final payload via MCP.
 * **📦 Dynamic Hot-Loading:** Add, update, or remove skills on the fly using `.zip` files, custom `.skill` packages, or direct download URLs without ever restarting the server.
 
@@ -308,6 +309,7 @@ Use this skill when the user asks about stock prices or financial data...
 | `SKILLS_DIR` | `skills` | Local directory for skill folders (used by `local` backend) |
 | `SKILLS_STORAGE` | `local` | Storage backend: `local` or `s3` |
 | `ALLOW_RUN_SCRIPTS`| `false` | Whether to allow script execution via `mcp_get_script` |
+| `LAZY_INSTALL_VENVS`| `false` | If `true`, defers `requirements.txt` generation/installation to the first time a script is executed. If `false`, installs dependencies immediately upon skill installation. |
 
 ### S3 Storage (`SKILLS_STORAGE=s3`)
 

@@ -5,6 +5,8 @@ import re
 import shutil
 import tempfile
 import zipfile
+import platform
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -47,6 +49,7 @@ class SkillManager:
         s3_region: Optional[str] = None,
         s3_endpoint: Optional[str] = None,
         allow_run_scripts: bool = False,
+        lazy_install_venvs: bool = False,
     ):
         self.skills_dir = Path(skills_dir)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
@@ -57,6 +60,7 @@ class SkillManager:
         self.s3_region = s3_region
         self.s3_endpoint = s3_endpoint
         self.allow_run_scripts = allow_run_scripts
+        self.lazy_install_venvs = lazy_install_venvs
         self._agno_skills: Optional[Skills] = None
         self._load()
 
@@ -147,6 +151,33 @@ class SkillManager:
     # Skill installation helpers
     # ------------------------------------------------------------------
 
+    def _setup_skill_venv(self, skill_name: str) -> None:
+        """Create a virtual environment and install requirements for a skill, if needed."""
+        skill_dir = self.skills_dir / skill_name
+        req_files = list(skill_dir.rglob("requirements.txt"))
+        if not req_files:
+            return
+
+        venv_dir = skill_dir / ".venv"
+        logger.info("Creating uv venv for skill %s at %s", skill_name, venv_dir)
+        try:
+            subprocess.run(["uv", "venv", str(venv_dir)], check=True, capture_output=True)
+            
+            cmd = ["uv", "pip", "install", "-p", str(venv_dir)]
+            for req in req_files:
+                cmd.extend(["-r", str(req)])
+                
+            logger.info("Installing requirements for skill %s", skill_name)
+            subprocess.run(cmd, check=True, capture_output=True)
+
+            logger.info("Pre-compiling .pyc for faster startup in skill %s", skill_name)
+            subprocess.run(["python", "-m", "compileall", "-b", str(skill_dir)], capture_output=True)
+            
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stderr.decode("utf-8", errors="replace") if e.stderr else str(e)
+            logger.error("Failed to setup venv for skill %s: %s", skill_name, err_msg)
+            raise RuntimeError(f"Failed to setup venv for skill '{skill_name}': {err_msg}")
+
     async def _install_from_index(self, url: str) -> List[str]:
         """Fetch and install skills defined in a Cloudflare RFC skills_index.json.
 
@@ -235,6 +266,8 @@ class SkillManager:
                     logger.warning("Index name '%s' differs from SKILL.md name '%s'", name, parsed_name)
 
                 shutil.move(str(source_dir), str(skill_dir))
+                if not self.lazy_install_venvs:
+                    self._setup_skill_venv(parsed_name)
                 installed_names.append(parsed_name)
 
         return installed_names
@@ -310,6 +343,8 @@ class SkillManager:
                     )
                     
                 shutil.move(str(source_dir), str(target_dir))
+                if not self.lazy_install_venvs:
+                    self._setup_skill_venv(skill_name)
                 installed_names.append(skill_name)
 
         return installed_names
@@ -513,6 +548,37 @@ class SkillManager:
                 for arg in args:
                     if any(c in forbidden_chars for c in arg):
                         raise ValueError(f"Argument contains forbidden shell characters: {arg}")
+
+            skill_dir = self.skills_dir / skill_name
+            venv_dir = skill_dir / ".venv"
+
+            if not venv_dir.exists() and list(skill_dir.rglob("requirements.txt")):
+                logger.info("Checking for lazy venv installation before executing skill %s", skill_name)
+                self._setup_skill_venv(skill_name)
+
+            venv_python = venv_dir / "bin" / "python"
+            if not venv_python.exists():
+                venv_python = venv_dir / "Scripts" / "python.exe"
+
+            target_script = skill_dir / script_path
+            if venv_python.exists() and target_script.suffix.lower() == ".py":
+                # Execute Python via subprocess without -S to ensure site-packages (like 'requests') are loaded correctly
+                cmd = [str(venv_python), str(target_script)] + (args or [])
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    stdout = result.stdout or ""
+                    stderr = result.stderr or ""
+                    if stderr:
+                        return f"Error executing script:\n{stderr}\n\nStdout:\n{stdout}"
+                    return stdout
+                except subprocess.TimeoutExpired:
+                    return "Error: Script execution timed out."
+                except Exception as e:
+                    return f"Error executing script: {str(e)}"
+
+            from agno.skills.utils import ensure_executable
+            if platform.system() != "Windows":
+                ensure_executable(target_script)
 
         return self.agno._get_skill_script(skill_name, script_path, execute=execute, args=args)
 

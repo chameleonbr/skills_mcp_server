@@ -170,3 +170,58 @@ def test_mcp_get_script_execute_enabled_with_shell_injection(tmp_path):
         manager.mcp_get_script("safe-skill", "safe_script.py", execute=True, args=["arg1", "&& rm -rf /"])
 
 
+def test_setup_skill_venv_creates_venv(tmp_path):
+    manager = SkillManager(skills_dir=str(tmp_path))
+    skill_dir = tmp_path / "venv_skill"
+    skill_dir.mkdir()
+    (skill_dir / "requirements.txt").write_text("requests==2.28.2")
+
+    with patch("subprocess.run") as mock_run:
+        manager._setup_skill_venv("venv_skill")
+
+        assert mock_run.call_count == 3
+        
+        args_venv = mock_run.call_args_list[0][0][0]
+        assert args_venv[:2] == ["uv", "venv"]
+        
+        args_pip = mock_run.call_args_list[1][0][0]
+        assert args_pip[:4] == ["uv", "pip", "install", "-p"]
+
+        args_compile = mock_run.call_args_list[2][0][0]
+        assert args_compile[:3] == ["python", "-m", "compileall"]
+
+
+def test_mcp_get_script_lazy_venv_installation(tmp_path):
+    manager = SkillManager(skills_dir=str(tmp_path), allow_run_scripts=True, lazy_install_venvs=True)
+    manager._agno_skills = MagicMock()
+    
+    skill_dir = tmp_path / "lazy_skill"
+    skill_dir.mkdir()
+    (skill_dir / "requirements.txt").write_text("requests")
+    script_file = skill_dir / "run.py"
+    script_file.write_text("print('hello')")
+
+    with patch.object(manager, "_setup_skill_venv") as mock_setup, \
+         patch("subprocess.run") as mock_run:
+         
+        mock_result = MagicMock()
+        mock_result.stdout = "hello\n"
+        mock_result.stderr = ""
+        mock_run.return_value = mock_result
+        
+        # When _setup_skill_venv is called, it should mock creating the python executable
+        def fake_setup(*args, **kwargs):
+            venv_dir = skill_dir / ".venv"
+            bin_dir = venv_dir / "bin"
+            bin_dir.mkdir(parents=True, exist_ok=True)
+            (bin_dir / "python").touch()
+
+        mock_setup.side_effect = fake_setup
+
+        output = manager.mcp_get_script("lazy_skill", "run.py", execute=True)
+
+        mock_setup.assert_called_once_with("lazy_skill")
+        mock_run.assert_called_once()
+        assert output == "hello\n"
+
+
