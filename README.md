@@ -139,8 +139,8 @@ Interactive docs available at `http://localhost:8000/docs`.
 | `POST` | `/skills/upload` | Install skill(s) via file upload |
 | `DELETE` | `/skills/{name}` | Delete a skill |
 | `DELETE` | `/skills` | Delete all skills |
-| `GET` | `/skills/prompt_snippet` | Get system prompt snippet for agents (supports `?skill_list=skill1,skill2`) |
-| `POST` | `/skills/prompt_snippet` | Inject prompt snippet into the passed JSON payload (supports `?skill_list=...`) |
+| `GET` | `/skills/prompt_snippet` | Get system prompt snippet for agents (supports `?skill_list=skill1,skill2` and `?prompt_enforcement=false`) |
+| `POST` | `/skills/prompt_snippet` | Inject prompt snippet into the passed JSON payload (supports `?skill_list=...` and `?prompt_enforcement=false`) |
 
 ### Health Check
 
@@ -256,11 +256,15 @@ The MCP server is mounted at `/mcp` using the **StreamableHTTP** transport.
 
 ### Agent System Prompt Integration
 
-To inject skill awareness into any agent, retrieve the pre-built prompt snippet. You can optionally pass `skill_list` to only include specific skills by name.
+To inject skill awareness into any agent, retrieve the pre-built prompt snippet. You can optionally pass `skill_list` to only include specific skills by name. By default, a strict prompt enforcement string is prepended to ensure agents use tools exactly as instructed, which can be disabled via `prompt_enforcement=false`.
 
 ```bash
-# Get snippet containing ALL installed skills
+# Get snippet containing ALL installed skills (includes prompt enforcement by default)
 curl -X GET http://localhost:8000/skills/prompt_snippet \
+  -H "X-API-Key: your_api_key"
+
+# Get snippet without the prompt enforcement rules
+curl -X GET "http://localhost:8000/skills/prompt_snippet?prompt_enforcement=false" \
   -H "X-API-Key: your_api_key"
 
 # Get snippet filtered to specific skills

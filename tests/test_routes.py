@@ -97,6 +97,7 @@ def test_prompt_snippet(test_client, mock_skill_manager):
     response = test_client.get("/skills/prompt_snippet")
     assert response.status_code == status.HTTP_200_OK
     assert "test" in response.json()
+    assert "skills_usage_enforcement" in response.json()
     mock_skill_manager.get_system_prompt_snippet.assert_called_once_with(None)
 
 def test_prompt_snippet_with_filter(test_client, mock_skill_manager):
@@ -104,7 +105,17 @@ def test_prompt_snippet_with_filter(test_client, mock_skill_manager):
     
     response = test_client.get("/skills/prompt_snippet?skill_list=skill1,skill2")
     assert response.status_code == status.HTTP_200_OK
+    assert "skills_usage_enforcement" in response.json()
     mock_skill_manager.get_system_prompt_snippet.assert_called_once_with(["skill1", "skill2"])
+
+def test_prompt_snippet_without_enforcement(test_client, mock_skill_manager):
+    mock_skill_manager.get_system_prompt_snippet.return_value = "<skills_system>no_enforcement</skills_system>"
+    
+    response = test_client.get("/skills/prompt_snippet?prompt_enforcement=false")
+    assert response.status_code == status.HTTP_200_OK
+    assert "no_enforcement" in response.json()
+    assert "skills_usage_enforcement" not in response.json()
+    mock_skill_manager.get_system_prompt_snippet.assert_called_once_with(None)
 
 
 def test_prompt_snippet_post(test_client, mock_skill_manager):
@@ -119,5 +130,19 @@ def test_prompt_snippet_post(test_client, mock_skill_manager):
     data = response.json()
     assert data["custom_field"] == "hello world"
     assert data["nested"]["a"] == 1
-    assert data["prompt"] == "<skills_system>post_snippet</skills_system>"
+    assert "<skills_system>post_snippet</skills_system>" in data["prompt"]
+    assert "skills_usage_enforcement" in data["prompt"]
     mock_skill_manager.get_system_prompt_snippet.assert_called_once_with(["skill1"])
+
+def test_prompt_snippet_post_without_enforcement(test_client, mock_skill_manager):
+    mock_skill_manager.get_system_prompt_snippet.return_value = "<skills_system>post_snippet</skills_system>"
+    
+    payload = {"custom_field": "hello world"}
+    response = test_client.post("/skills/prompt_snippet?prompt_enforcement=false", json=payload)
+    assert response.status_code == status.HTTP_200_OK
+    
+    data = response.json()
+    assert data["custom_field"] == "hello world"
+    assert data["prompt"] == "<skills_system>post_snippet</skills_system>"
+    assert "skills_usage_enforcement" not in data["prompt"]
+    mock_skill_manager.get_system_prompt_snippet.assert_called_once_with(None)

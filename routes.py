@@ -67,9 +67,37 @@ def list_skills(
     """Return a summary list of every currently loaded skill."""
     return manager.list_skills()
 
-from typing import Annotated, Optional
+ENFORCEMENT_PROMPT = """
+<skills_usage_enforcement>
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Security, UploadFile, status, Body
+## Critical Rule: Mandatory Use of Skills
+
+You have access to a system of specialized skills. Before responding to any question that falls within the domain of an available skill, you MUST follow the workflow below — no exceptions.
+
+### Mandatory Workflow
+
+1. **Identify** whether the user's request matches the domain of any skill listed in `<skills_system>`
+2. **Load** the skill instructions via `get_skill_instructions(skill_name)` BEFORE formulating any response
+3. **Consult references** with `get_skill_reference(skill_name, reference_path)` when available and relevant
+4. **Execute scripts** with `get_skill_script(skill_name, script_path)` only when `<scripts>` lists actual files
+
+### Absolute Prohibitions
+
+- ❌ NEVER respond based solely on your general knowledge when a relevant skill is available
+- ❌ NEVER call the skill name as if it were a function (e.g., `example-skill(...)`)
+- ❌ NEVER skip `get_skill_instructions` and jump directly to `get_skill_reference` or `get_skill_script`
+- ❌ NEVER use `get_skill_script` on skills that declare `<scripts>none</scripts>`
+
+### Activation Criteria
+
+If **any part** of the user's request touches the domain of an available skill, that skill must be loaded. When in doubt, load the skill — it is better to load unnecessarily than to ignore it.
+
+### Response Format After Loading a Skill
+
+Only after executing `get_skill_instructions` are you authorized to compose your response, strictly following the instructions returned by the skill.
+
+</skills_usage_enforcement>
+"""
 
 @router.get(
     "/prompt_snippet",
@@ -82,6 +110,10 @@ def prompt_snippet(
         None,
         description="Optional comma-separated list of skill names to include in the snippet.",
     ),
+    prompt_enforcement: Optional[bool] = Query(
+        True,
+        description="Optional prompt enforcement string to include in the snippet. If True, the snippet will include a prompt enforcement string.",
+    ),
 ) -> str:
     """Return the Agno system prompt snippet ready to be included in any agent.
 
@@ -90,7 +122,10 @@ def prompt_snippet(
     Paste this into your agent's system prompt to enable skill discovery.
     """
     skill_names = [s.strip() for s in skill_list.split(",")] if skill_list else None
-    return manager.get_system_prompt_snippet(skill_names)
+    snippet = manager.get_system_prompt_snippet(skill_names)
+    if prompt_enforcement:
+        return ENFORCEMENT_PROMPT + "\n\n" + snippet
+    return snippet
 
 
 @router.post(
@@ -104,6 +139,10 @@ def prompt_snippet_post(
         None,
         description="Optional comma-separated list of skill names to include in the snippet.",
     ),
+    prompt_enforcement: Optional[bool] = Query(
+        True,
+        description="Optional prompt enforcement string to include in the snippet. If True, the snippet will include a prompt enforcement string.",
+    ),
 ) -> dict:
     """Return the received body with an injected 'prompt' string containing the Agno skills snippet.
 
@@ -112,6 +151,8 @@ def prompt_snippet_post(
     """
     skill_names = [s.strip() for s in skill_list.split(",")] if skill_list else None
     snippet = manager.get_system_prompt_snippet(skill_names)
+    if prompt_enforcement:
+        snippet = ENFORCEMENT_PROMPT + "\n\n" + snippet
     
     response_body = request_body.copy()
     response_body["prompt"] = snippet
