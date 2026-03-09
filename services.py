@@ -94,6 +94,16 @@ class SkillManager:
                 logger.info("Using LocalSkills loader (%s)", self.skills_dir)
 
             self._agno_skills = Skills(loaders=[loader])
+            
+            # Post-processing: Filter out unwanted files (.pyc, requirements.txt, etc.) from scripts
+            for s in self._agno_skills.get_all_skills():
+                if s.scripts:
+                    s.scripts = [
+                        script for script in s.scripts 
+                        if not script.endswith(".pyc") 
+                        and not script.endswith("requirements.txt")
+                    ]
+            
             logger.info(
                 "Loaded %d skill(s)",
                 len(self._agno_skills.get_all_skills()),
