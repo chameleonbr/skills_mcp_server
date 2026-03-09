@@ -7,6 +7,23 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
+# Install curl for nvm
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Configure and install nvm and node
+ARG NODE_VERSION=20
+ENV NODE_VERSION=${NODE_VERSION}
+ENV NVM_DIR=/root/.nvm
+
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash \
+    && . "$NVM_DIR/nvm.sh" \
+    && nvm install ${NODE_VERSION} \
+    && nvm alias default ${NODE_VERSION} \
+    && nvm use default \
+    && ln -sf $(nvm which default) /usr/local/bin/node \
+    && ln -sf $(dirname $(nvm which default))/npm /usr/local/bin/npm \
+    && ln -sf $(dirname $(nvm which default))/npx /usr/local/bin/npx
+
 # Set working directory
 WORKDIR /app
 

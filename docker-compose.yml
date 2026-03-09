@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - NODE_VERSION=20
     container_name: skills-mcp-server
     ports:
       - "8000:8000"
