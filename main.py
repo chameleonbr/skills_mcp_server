@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.requests import Request
 
@@ -172,6 +173,9 @@ app.add_middleware(
 # MCPAuthMiddleware is added AFTER CORSMiddleware so that it runs FIRST
 # (Starlette applies middleware in reverse registration order).
 app.add_middleware(MCPAuthMiddleware)
+
+# ProxyHeadersMiddleware runs before everything to set the client IP correctly from X-Forwarded-For
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 
 # ---------------------------------------------------------------------------
