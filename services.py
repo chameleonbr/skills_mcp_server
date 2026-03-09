@@ -560,8 +560,12 @@ class SkillManager:
             if not venv_python.exists():
                 venv_python = venv_dir / "Scripts" / "python.exe"
 
-            target_script = skill_dir / script_path
-            if venv_python.exists() and target_script.suffix.lower() == ".py":
+            target_script = skill_dir / "scripts" / script_path
+            if not target_script.exists():
+                # Fallback to the root if the developer put the script in the root directory
+                target_script = skill_dir / script_path
+
+            if venv_python.exists() and target_script.suffix.lower() == ".py" and target_script.exists():
                 # Execute Python via subprocess without -S to ensure site-packages (like 'requests') are loaded correctly
                 cmd = [str(venv_python), str(target_script)] + (args or [])
                 try:
