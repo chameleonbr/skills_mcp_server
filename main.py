@@ -43,6 +43,7 @@ API_KEY: str = os.environ.get("API_KEY", "")
 SKILLS_DIR: str = os.environ.get("SKILLS_DIR", "skills")
 ALLOW_RUN_SCRIPTS: bool = os.environ.get("ALLOW_RUN_SCRIPTS", "false").lower() == "true"
 LAZY_INSTALL_VENVS: bool = os.environ.get("LAZY_INSTALL_VENVS", "false").lower() == "true"
+ALLOW_GET_AVAILABLE_SKILLS: bool = os.environ.get("ALLOW_GET_AVAILABLE_SKILLS", "true").lower() == "true"
 
 # Storage backend: "local" (default) or "s3"
 SKILLS_STORAGE: str = os.environ.get("SKILLS_STORAGE", "local").lower()
@@ -76,7 +77,10 @@ def _get_manager() -> SkillManager:
     return _app_ref.state.skill_manager
 
 
-mcp = create_mcp_server(get_manager=_get_manager)
+mcp = create_mcp_server(
+    get_manager=_get_manager,
+    expose_available_skills=ALLOW_GET_AVAILABLE_SKILLS,
+)
 
 
 # ---------------------------------------------------------------------------

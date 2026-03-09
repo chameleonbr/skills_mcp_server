@@ -272,7 +272,7 @@ Paste the returned XML snippet into your agent's `system_prompt`. It describes t
 
 ### Low-Code Integration (n8n, Make, Custom Apps)
 
-To simplify integrations in platforms where manipulating strings is hard, use the `POST` endpoint to inject the specific prompt directly into an arbitrary payload:
+To simplify integrations in platforms where manipulating strings is hard, use the `POST` endpoint sending the payload as JSON and receiving the same payload with the `prompt` with the additional system instructions that you need to append to the system prompt of your agent:
 
 ```bash
 curl -X POST "http://localhost:8000/skills/prompt_snippet" \
@@ -331,6 +331,16 @@ Use this skill when the user asks about stock prices or financial data...
 | `SKILLS_STORAGE` | `local` | Storage backend: `local` or `s3` |
 | `ALLOW_RUN_SCRIPTS`| `false` | Whether to allow script execution via `mcp_get_script` |
 | `LAZY_INSTALL_VENVS`| `false` | If `true`, defers `requirements.txt` generation/installation to the first time a script is executed. If `false`, installs dependencies immediately upon skill installation. |
+| `ALLOW_GET_AVAILABLE_SKILLS`| `true` | Exposes the `get_available_skills` tool globally via FastMCP. Set to `false` to hide discovery mechanisms via tool calls. |
+
+#### Detailed Explanation of Core Variables
+
+- **`API_KEY`**: This is the master secret used to secure both the REST API endpoints and the FastMCP transport connection. It is mandatory for any operation.
+- **`SKILLS_DIR`**: Defines the path (relative to the app root or absolute) where the skill folders are maintained. Defaults to `skills` in the local backend.
+- **`SKILLS_STORAGE`**: Determines the strategy for loading skills. It can be set to `local` (reads from `SKILLS_DIR`) or `s3` (syncs skills from an AWS S3-compatible object storage).
+- **`ALLOW_RUN_SCRIPTS`**: A security toggle. If set to `false` (default), the `get_skill_script` tool with `execute=True` will be rejected by the application. Setting it to `true` allows agents to effectively run python scripts defined by skills.
+- **`LAZY_INSTALL_VENVS`**: Performance toggle. If `false` (default), the server blocks during skill installation to build the Python Virtual Environment and install the `requirements.txt`. If `true`, the installation is instantaneous, but the runtime will pause to install the `.venv` only when a script from the skill is executed for the first time.
+- **`ALLOW_GET_AVAILABLE_SKILLS`**: Integration toggle. If `true` (default), the `get_available_skills` tool is exposed globally via FastMCP for dynamic discovery. If `false`, the tool is hidden, requiring the system prompt to explicitly define the skills or using the `/skills/prompt_snippet` REST endpoint for injection, this is useful to avoid the LLM to discover skills that are not meant to be used, requiring the developer to explicitly define the skills in the system prompt, injecting the snippet.
 
 ### S3 Storage (`SKILLS_STORAGE=s3`)
 

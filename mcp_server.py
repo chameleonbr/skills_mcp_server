@@ -16,7 +16,10 @@ from services import SkillManager
 logger = logging.getLogger(__name__)
 
 
-def create_mcp_server(get_manager: Callable[[], SkillManager]) -> FastMCP:
+def create_mcp_server(
+    get_manager: Callable[[], SkillManager],
+    expose_available_skills: bool = True,
+) -> FastMCP:
     """Create and configure the FastMCP server with Agno skill tools.
 
     Args:
@@ -42,15 +45,16 @@ def create_mcp_server(get_manager: Callable[[], SkillManager]) -> FastMCP:
     # Tool: get_available_skills
     # -----------------------------------------------------------------------
 
-    @mcp.tool
-    def get_available_skills() -> str:
-        """Return a list of all skills with their name and description.
+    if expose_available_skills:
+        @mcp.tool
+        def get_available_skills() -> str:
+            """Return a list of all skills with their name and description.
 
-        Call this first to discover which skills are available before invoking
-        any other skill tool.
-        """
-        logger.debug("MCP tool: get_available_skills()")
-        return get_manager().agno.get_system_prompt_snippet()
+            Call this first to discover which skills are available before invoking
+            any other skill tool.
+            """
+            logger.debug("MCP tool: get_available_skills()")
+            return get_manager().agno.get_system_prompt_snippet()
 
     # -----------------------------------------------------------------------
     # Tool: get_skill_instructions
