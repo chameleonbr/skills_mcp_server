@@ -1,6 +1,7 @@
 import pytest
 import base64
 from pathlib import Path
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from services import SkillManager
@@ -179,16 +180,13 @@ def test_setup_skill_venv_creates_venv(tmp_path):
     with patch("subprocess.run") as mock_run:
         manager._setup_skill_venv("venv_skill")
 
-        assert mock_run.call_count == 3
+        assert mock_run.call_count == 2
         
         args_venv = mock_run.call_args_list[0][0][0]
-        assert args_venv[:2] == ["uv", "venv"]
+        assert args_venv[:4] == [sys.executable, "-m", "uv", "venv"]
         
         args_pip = mock_run.call_args_list[1][0][0]
-        assert args_pip[:4] == ["uv", "pip", "install", "-p"]
-
-        args_compile = mock_run.call_args_list[2][0][0]
-        assert args_compile[:3] == ["python", "-m", "compileall"]
+        assert args_pip[:6] == [sys.executable, "-m", "uv", "pip", "install", "-p"]
 
 
 def test_mcp_get_script_lazy_venv_installation(tmp_path):
@@ -221,7 +219,11 @@ def test_mcp_get_script_lazy_venv_installation(tmp_path):
         output = manager.mcp_get_script("lazy_skill", "run.py", execute=True)
 
         mock_setup.assert_called_once_with("lazy_skill")
-        mock_run.assert_called_once()
+        assert mock_run.call_count == 2
+        
+        args_compile = mock_run.call_args_list[0][0][0]
+        assert args_compile[:3] == [sys.executable, "-m", "compileall"]
+        
         assert output == "hello\n"
 
 

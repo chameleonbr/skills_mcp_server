@@ -2,6 +2,7 @@ import base64
 import io
 import logging
 import re
+import sys
 import shutil
 import tempfile
 import zipfile
@@ -161,17 +162,14 @@ class SkillManager:
         venv_dir = skill_dir / ".venv"
         logger.info("Creating uv venv for skill %s at %s", skill_name, venv_dir)
         try:
-            subprocess.run(["uv", "venv", str(venv_dir)], check=True, capture_output=True)
+            subprocess.run([sys.executable, "-m", "uv", "venv", str(venv_dir)], check=True, capture_output=True)
             
-            cmd = ["uv", "pip", "install", "-p", str(venv_dir)]
+            cmd = [sys.executable, "-m", "uv", "pip", "install", "-p", str(venv_dir)]
             for req in req_files:
                 cmd.extend(["-r", str(req)])
                 
             logger.info("Installing requirements for skill %s", skill_name)
             subprocess.run(cmd, check=True, capture_output=True)
-
-            logger.info("Pre-compiling .pyc for faster startup in skill %s", skill_name)
-            subprocess.run(["python", "-m", "compileall", "-b", str(skill_dir)], capture_output=True)
             
         except subprocess.CalledProcessError as e:
             err_msg = e.stderr.decode("utf-8", errors="replace") if e.stderr else str(e)
@@ -565,6 +563,14 @@ class SkillManager:
                 # Fallback to the root if the developer put the script in the root directory
                 target_script = skill_dir / script_path
 
+            if target_script.suffix.lower() == ".py" and target_script.exists():
+                # Compile .pyc dynamically if not already compiled to optimize startup time
+                pyc_file = target_script.with_name(target_script.stem + ".pyc")
+                if not pyc_file.exists():
+                    target_dir = target_script.parent
+                    logger.info("Pre-compiling .pyc for faster startup in %s", target_dir)
+                    subprocess.run([sys.executable, "-m", "compileall", "-b", str(target_dir)], capture_output=True)
+
             if venv_python.exists() and target_script.suffix.lower() == ".py" and target_script.exists():
                 # Execute Python via subprocess without -S to ensure site-packages (like 'requests') are loaded correctly
                 cmd = [str(venv_python), str(target_script)] + (args or [])
@@ -580,11 +586,35 @@ class SkillManager:
                 except Exception as e:
                     return f"Error executing script: {str(e)}"
 
+            # If no venv is found, but it's a python script, we still want to use the system python explicitly 
+            # to avoid [Errno 8] Exec format error when parsing files with no shebang.
+            if target_script.suffix.lower() == ".py" and target_script.exists():
+                cmd = [sys.executable, str(target_script)] + (args or [])
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    stdout = result.stdout or ""
+                    stderr = result.stderr or ""
+                    if stderr:
+                        return f"Error executing script:\n{stderr}\n\nStdout:\n{stdout}"
+                    return stdout
+                except subprocess.TimeoutExpired:
+                    return "Error: Script execution timed out."
+                except Exception as e:
+                    return f"Error executing script: {str(e)}"
+
+            # Final Agno Fallback for non-python executables (bash, etc)
             from agno.skills.utils import ensure_executable
             if platform.system() != "Windows":
-                ensure_executable(target_script)
+                # Ensure the resolved target script is executable
+                try:
+                    if target_script.exists():
+                        ensure_executable(target_script)
+                except Exception as e:
+                    logger.warning(f"Failed to make {target_script} executable: {e}")
 
-        return self.agno._get_skill_script(skill_name, script_path, execute=execute, args=args)
+            # Let Agno handle the execution of non-python scripts or missing scripts 
+            # using the original script_path requested by the user, leaving the responsibility to them
+            return self.agno._get_skill_script(skill_name, script_path, execute, args)
 
     def get_system_prompt_snippet(self, skill_list: Optional[List[str]] = None) -> str:
         """Generate a system prompt snippet filtered by an optional blocklist/allowlist.
