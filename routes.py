@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Security, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Security, UploadFile, status
 from fastapi.security import APIKeyHeader
 
 from models import (
