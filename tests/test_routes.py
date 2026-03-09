@@ -105,3 +105,19 @@ def test_prompt_snippet_with_filter(test_client, mock_skill_manager):
     response = test_client.get("/skills/prompt_snippet?skill_list=skill1,skill2")
     assert response.status_code == status.HTTP_200_OK
     mock_skill_manager.get_system_prompt_snippet.assert_called_once_with(["skill1", "skill2"])
+
+
+def test_prompt_snippet_post(test_client, mock_skill_manager):
+    mock_skill_manager.get_system_prompt_snippet.return_value = "<skills_system>post_snippet</skills_system>"
+    
+    # We pass some arbitrary JSON body
+    payload = {"custom_field": "hello world", "nested": {"a": 1}}
+    
+    response = test_client.post("/skills/prompt_snippet?skill_list=skill1", json=payload)
+    assert response.status_code == status.HTTP_200_OK
+    
+    data = response.json()
+    assert data["custom_field"] == "hello world"
+    assert data["nested"]["a"] == 1
+    assert data["prompt"] == "<skills_system>post_snippet</skills_system>"
+    mock_skill_manager.get_system_prompt_snippet.assert_called_once_with(["skill1"])

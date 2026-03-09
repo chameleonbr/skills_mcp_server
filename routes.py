@@ -69,7 +69,7 @@ def list_skills(
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Security, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Security, UploadFile, status, Body
 
 @router.get(
     "/prompt_snippet",
@@ -91,6 +91,31 @@ def prompt_snippet(
     """
     skill_names = [s.strip() for s in skill_list.split(",")] if skill_list else None
     return manager.get_system_prompt_snippet(skill_names)
+
+
+@router.post(
+    "/prompt_snippet",
+    summary="Inject system prompt snippet into a request body",
+)
+def prompt_snippet_post(
+    manager: Annotated[SkillManager, Depends(get_skill_manager)],
+    request_body: dict = Body(...),
+    skill_list: Optional[str] = Query(
+        None,
+        description="Optional comma-separated list of skill names to include in the snippet.",
+    ),
+) -> dict:
+    """Return the received body with an injected 'prompt' string containing the Agno skills snippet.
+
+    This is useful for low-code tools (like n8n) to build an agent payload in one step.
+    Everything passed in the JSON body is returned as-is, with 'prompt' appended or overwritten.
+    """
+    skill_names = [s.strip() for s in skill_list.split(",")] if skill_list else None
+    snippet = manager.get_system_prompt_snippet(skill_names)
+    
+    response_body = request_body.copy()
+    response_body["prompt"] = snippet
+    return response_body
 
 
 @router.get(

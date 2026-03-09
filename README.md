@@ -140,6 +140,7 @@ Interactive docs available at `http://localhost:8000/docs`.
 | `DELETE` | `/skills/{name}` | Delete a skill |
 | `DELETE` | `/skills` | Delete all skills |
 | `GET` | `/skills/prompt_snippet` | Get system prompt snippet for agents (supports `?skill_list=skill1,skill2`) |
+| `POST` | `/skills/prompt_snippet` | Inject prompt snippet into the passed JSON payload (supports `?skill_list=...`) |
 
 ### Health Check
 
@@ -268,6 +269,26 @@ curl -X GET "http://localhost:8000/skills/prompt_snippet?skill_list=web_browsing
 ```
 
 Paste the returned XML snippet into your agent's `system_prompt`. It describes the loaded skills and how to use the MCP tools to access them.
+
+### Low-Code Integration (n8n, Make, Custom Apps)
+
+To simplify integrations in platforms where manipulating strings is hard, use the `POST` endpoint to inject the specific prompt directly into an arbitrary payload:
+
+```bash
+curl -X POST "http://localhost:8000/skills/prompt_snippet" \
+  -H "X-API-Key: your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Help me"}], "temperature": 0.7}'
+```
+
+Returns the original payload with `"prompt"` dynamically appended/overwritten with the system instructions:
+```json
+{
+  "messages": [{"role": "user", "content": "Help me"}],
+  "temperature": 0.7,
+  "prompt": "<skills_system>...</skills_system>"
+}
+```
 
 ---
 
