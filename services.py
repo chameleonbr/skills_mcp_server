@@ -622,9 +622,9 @@ class SkillManager:
                 except Exception as e:
                     logger.warning(f"Failed to make {target_script} executable: {e}")
 
-            # Let Agno handle the execution of non-python scripts or missing scripts 
-            # using the original script_path requested by the user, leaving the responsibility to them
-            return self.agno._get_skill_script(skill_name, script_path, execute, args)
+        # Let Agno handle the execution of non-python scripts or missing scripts 
+        # using the original script_path requested by the user, leaving the responsibility to them
+        return self.agno._get_skill_script(skill_name, script_path, execute, args)
 
     def get_system_prompt_snippet(self, skill_list: Optional[List[str]] = None) -> str:
         """Generate a system prompt snippet filtered by an optional blocklist/allowlist.

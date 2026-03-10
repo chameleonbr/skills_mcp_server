@@ -135,7 +135,7 @@ def test_mcp_get_script_security_validations(tmp_path):
 
     # Valid call
     assert manager.mcp_get_script("safe-skill", "safe_script.py") == "script output"
-    manager._agno_skills._get_skill_script.assert_called_with("safe-skill", "safe_script.py", execute=False, args=None)
+    manager._agno_skills._get_skill_script.assert_called_with("safe-skill", "safe_script.py", False, None)
 
     # Invalid names/paths
     with pytest.raises(ValueError):
@@ -151,7 +151,7 @@ def test_mcp_get_script_execute_disabled(tmp_path):
 
     # Reading script is allowed
     manager.mcp_get_script("safe-skill", "safe_script.py", execute=False)
-    manager._agno_skills._get_skill_script.assert_called_with("safe-skill", "safe_script.py", execute=False, args=None)
+    manager._agno_skills._get_skill_script.assert_called_with("safe-skill", "safe_script.py", False, None)
 
     # Executing script is blocked
     with pytest.raises(ValueError, match="Script execution is disabled"):
