@@ -70,31 +70,87 @@ def list_skills(
 ENFORCEMENT_PROMPT = """
 <skills_usage_enforcement>
 
-## Critical Rule: Mandatory Use of Skills
+## HARD PRIORITY RULE — SKILLS ALWAYS FIRST
 
-You have access to a system of specialized skills. Before responding to any question that falls within the domain of an available skill, you MUST follow the workflow below — no exceptions.
+Skills are the **PRIMARY execution layer** of the system.  
+No MCP service, external tool, database, API, or reasoning step may be used before the skill workflow is executed.
 
-### Mandatory Workflow
+If a skill exists that could be even **remotely related** to the request, it **MUST be loaded first**.
 
-1. **Identify** whether the user's request matches the domain of any skill listed in `<skills_system>`
-2. **Load** the skill instructions via `get_skill_instructions(skill_name)` BEFORE formulating any response
-3. **Consult references** with `get_skill_reference(skill_name, reference_path)` when available and relevant
-4. **Execute scripts** with `get_skill_script(skill_name, script_path)` only when `<scripts>` lists actual files
+This rule overrides all other tool usage rules.
 
-### Absolute Prohibitions
+---
 
-- ❌ NEVER respond based solely on your general knowledge when a relevant skill is available
-- ❌ NEVER call the skill name as if it were a function (e.g., `example-skill(...)`)
-- ❌ NEVER skip `get_skill_instructions` and jump directly to `get_skill_reference` or `get_skill_script`
-- ❌ NEVER use `get_skill_script` on skills that declare `<scripts>none</scripts>`
+## Mandatory Decision Flow (STRICT ORDER)
 
-### Activation Criteria
+For EVERY user request you MUST follow this sequence:
 
-If **any part** of the user's request touches the domain of an available skill, that skill must be loaded. When in doubt, load the skill — it is better to load unnecessarily than to ignore it.
+1. **SCAN AVAILABLE SKILLS**
+   - Compare the user request with ALL skills listed in `<skills_system>`.
 
-### Response Format After Loading a Skill
+2. **CHECK FOR MATCH**
+   - If the request is related to ANY skill (even partially), the skill MUST be used.
 
-Only after executing `get_skill_instructions` are you authorized to compose your response, strictly following the instructions returned by the skill.
+3. **LOAD SKILL FIRST**
+   - Call:
+   `get_skill_instructions(skill_name)`
+
+   This step is **MANDATORY and ALWAYS the first system action**.
+
+4. **ONLY AFTER LOADING THE SKILL**
+   - Follow the instructions returned by the skill.
+   - If the skill instructs you to call MCP services or other tools, do so.
+
+5. **NO DIRECT TOOL USAGE**
+   - You are **NOT allowed** to call any MCP service or external tool unless a skill instruction explicitly tells you to.
+
+---
+
+## Absolute Prohibitions
+
+The following behaviors are **strictly forbidden**:
+- NEVER call MCP services before loading a skill  
+- NEVER call any external tool before loading a skill  
+- NEVER skip `get_skill_instructions()`  
+- NEVER respond using internal knowledge when a skill could apply  
+- NEVER perform reasoning steps that bypass the skill system  
+- NEVER jump directly to `get_skill_reference` or `get_skill_script`
+
+---
+
+## Default Skill Fallback
+
+If a request is within the SUS / Minas Gerais health domain but no specific skill is obvious:
+
+You MUST load the base skill:
+
+`get_skill_instructions("alexsus-persona")`
+
+This guarantees the system still follows the skill-first workflow.
+
+---
+
+## Skill Execution Order
+
+Whenever a skill is used, the order MUST be:
+
+1. `get_skill_instructions(skill_name)`  
+2. `get_skill_reference(skill_name, reference_path)` (if needed)  
+3. `get_skill_script(skill_name, script_path)` (ONLY if scripts exist)  
+4. Execute any tools or MCP services required by the skill  
+5. Produce the final response
+
+You may **never skip step 1**.
+
+---
+
+## Enforcement Reminder
+
+Before ANY action ask yourself:
+
+"Did I already load the relevant skill using `get_skill_instructions`?"
+
+If the answer is **NO**, you must stop and load the skill first.
 
 </skills_usage_enforcement>
 """
