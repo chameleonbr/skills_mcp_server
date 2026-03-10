@@ -161,7 +161,7 @@ Returns `200 OK` with the number of currently loaded skills.
 ```bash
 curl -X POST http://localhost:8000/skills/upload \
   -H "X-API-Key: your_api_key" \
-  -F "file=@my_skill.zip"
+  -F "file=@my_skill.skill" # also accepts .zip
 ```
 
 ### 2. URL (direct zip download)

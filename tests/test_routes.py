@@ -76,6 +76,27 @@ async def test_upload_skill(test_client, mock_skill_manager):
     assert "uploaded_skill" in data["installed_skills"]
     assert mock_skill_manager._extract_and_install_skills.call_count == 1
 
+@pytest.mark.asyncio
+async def test_upload_skill_with_skill_extension(test_client, mock_skill_manager):
+    mock_skill_manager._extract_and_install_skills.return_value = ["uploaded_skill"]
+    
+    file_content = b"fakezipcontent"
+    # Even if it's .skill, we pass it under application/zip or application/octet-stream
+    files = {"file": ("test.skill", file_content, "application/octet-stream")}
+    
+    response = test_client.post("/skills/upload", files=files)
+    assert response.status_code == status.HTTP_201_CREATED
+    assert "uploaded_skill" in response.json()["installed_skills"]
+
+@pytest.mark.asyncio
+async def test_upload_skill_invalid_extension(test_client, mock_skill_manager):
+    file_content = b"fakecontent"
+    files = {"file": ("test.txt", file_content, "text/plain")}
+    
+    response = test_client.post("/skills/upload", files=files)
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "must be a .zip or .skill archive" in response.json()["detail"]
+
 def test_delete_skill(test_client, mock_skill_manager):
     mock_skill_manager.delete_skill.return_value = True
     

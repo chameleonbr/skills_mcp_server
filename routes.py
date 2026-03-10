@@ -227,18 +227,18 @@ async def add_skill(
     summary="Install a skill via file upload",
 )
 async def upload_skill(
-    file: Annotated[UploadFile, File(description="Zip archive (.zip) containing the skill folder.")],
+    file: Annotated[UploadFile, File(description="Archive (.zip or .skill) containing the skill folder.")],
     manager: Annotated[SkillManager, Depends(get_skill_manager)],
 ) -> InstallResponse:
-    """Install a skill by uploading a .zip file directly (multipart/form-data).
+    """Install a skill by uploading an archive file directly (multipart/form-data).
 
     Form fields:
-    - **file**: the `.zip` archive containing the skill (must have a `SKILL.md` inside).
+    - **file**: the `.zip` or `.skill` archive containing the skill (must have a `SKILL.md` inside).
     """
-    if not file.filename or not file.filename.endswith(".zip"):
+    if not file.filename or not (file.filename.endswith(".zip") or file.filename.endswith(".skill")):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Uploaded file must be a .zip archive.",
+            detail="Uploaded file must be a .zip or .skill archive.",
         )
     try:
         zip_bytes = await file.read()
