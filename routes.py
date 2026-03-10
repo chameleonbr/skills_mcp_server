@@ -118,18 +118,6 @@ The following behaviors are **strictly forbidden**:
 
 ---
 
-## Default Skill Fallback
-
-If a request is within the SUS / Minas Gerais health domain but no specific skill is obvious:
-
-You MUST load the base skill:
-
-`get_skill_instructions("alexsus-persona")`
-
-This guarantees the system still follows the skill-first workflow.
-
----
-
 ## Skill Execution Order
 
 Whenever a skill is used, the order MUST be:
