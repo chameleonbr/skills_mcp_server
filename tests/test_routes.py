@@ -46,7 +46,15 @@ async def test_add_skill_url(test_client, mock_skill_manager):
     data = response.json()
     assert data["message"] == "Successfully installed 1 skill(s)."
     assert data["installed_skills"] == ["new_skill"]
-    mock_skill_manager.install_skill.assert_called_once_with(url="https://example.com/skill.zip", zip_base64=None)
+    mock_skill_manager.install_skill.assert_called_once_with(url="https://example.com/skill.zip", zip_base64=None, overwrite=False)
+
+@pytest.mark.asyncio
+async def test_add_skill_url_overwrite(test_client, mock_skill_manager):
+    mock_skill_manager.install_skill.return_value = ["new_skill"]
+    
+    response = test_client.post("/skills", json={"url": "https://example.com/skill.zip", "overwrite": True})
+    assert response.status_code == status.HTTP_201_CREATED
+    mock_skill_manager.install_skill.assert_called_once_with(url="https://example.com/skill.zip", zip_base64=None, overwrite=True)
 
 @pytest.mark.asyncio
 async def test_add_skill_base64(test_client, mock_skill_manager):
@@ -54,7 +62,7 @@ async def test_add_skill_base64(test_client, mock_skill_manager):
     
     response = test_client.post("/skills", json={"zip_base64": "UE..."})
     assert response.status_code == status.HTTP_201_CREATED
-    mock_skill_manager.install_skill.assert_called_once_with(url=None, zip_base64="UE...")
+    mock_skill_manager.install_skill.assert_called_once_with(url=None, zip_base64="UE...", overwrite=False)
 
 def test_add_skill_conflict(test_client, mock_skill_manager):
     mock_skill_manager.install_skill.side_effect = FileExistsError("Skill already exists")
@@ -75,6 +83,19 @@ async def test_upload_skill(test_client, mock_skill_manager):
     data = response.json()
     assert "uploaded_skill" in data["installed_skills"]
     assert mock_skill_manager._extract_and_install_skills.call_count == 1
+    mock_skill_manager._extract_and_install_skills.assert_called_once_with(file_content, overwrite=False)
+
+@pytest.mark.asyncio
+async def test_upload_skill_overwrite(test_client, mock_skill_manager):
+    mock_skill_manager._extract_and_install_skills.return_value = ["uploaded_skill"]
+    
+    file_content = b"fakezipcontent"
+    files = {"file": ("test.zip", file_content, "application/zip")}
+    data = {"overwrite": "true"}
+    
+    response = test_client.post("/skills/upload", files=files, data=data)
+    assert response.status_code == status.HTTP_201_CREATED
+    mock_skill_manager._extract_and_install_skills.assert_called_once_with(file_content, overwrite=True)
 
 @pytest.mark.asyncio
 async def test_upload_skill_with_skill_extension(test_client, mock_skill_manager):

@@ -186,7 +186,7 @@ class SkillManager:
             logger.error("Failed to setup venv for skill %s: %s", skill_name, err_msg)
             raise RuntimeError(f"Failed to setup venv for skill '{skill_name}': {err_msg}")
 
-    async def _install_from_index(self, url: str) -> List[str]:
+    async def _install_from_index(self, url: str, overwrite: bool = False) -> List[str]:
         """Fetch and install skills defined in a Cloudflare RFC skills_index.json.
 
         Args:
@@ -236,9 +236,13 @@ class SkillManager:
                 
             skill_dir = self.skills_dir / name
             if skill_dir.exists():
-                raise FileExistsError(
-                    f"Skill '{name}' already exists. Please delete it first."
-                )
+                if overwrite:
+                    logger.info("Overwriting existing skill '%s' from index", name)
+                    shutil.rmtree(skill_dir)
+                else:
+                    raise FileExistsError(
+                        f"Skill '{name}' already exists. Please delete it first."
+                    )
 
             # Download files to a temp directory first to ensure atomic install
             with tempfile.TemporaryDirectory() as tmp:
@@ -285,6 +289,7 @@ class SkillManager:
         zip_bytes: bytes,
         subpath: Optional[str] = None,
         repo_zip_root: Optional[str] = None,
+        overwrite: bool = False,
     ) -> List[str]:
         """Extract a zip archive and recursively install all found skills.
 
@@ -346,9 +351,13 @@ class SkillManager:
                 target_dir = self.skills_dir / skill_name
                 
                 if target_dir.exists():
-                    raise FileExistsError(
-                        f"Skill '{skill_name}' already exists. Please delete it first."
-                    )
+                    if overwrite:
+                        logger.info("Overwriting existing skill '%s'", skill_name)
+                        shutil.rmtree(target_dir)
+                    else:
+                        raise FileExistsError(
+                            f"Skill '{skill_name}' already exists. Please delete it first."
+                        )
                     
                 shutil.move(str(source_dir), str(target_dir))
                 if not self.lazy_install_venvs:
@@ -434,6 +443,7 @@ class SkillManager:
         self,
         url: Optional[str] = None,
         zip_base64: Optional[str] = None,
+        overwrite: bool = False,
     ) -> List[str]:
         """Install one or more skills from a URL, GitHub link, base64 encoded zip, or Discovery JSON.
 
@@ -457,23 +467,23 @@ class SkillManager:
                 url = url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/")
 
             if url.endswith(".json"):
-                installed_names = await self._install_from_index(url)
+                installed_names = await self._install_from_index(url, overwrite=overwrite)
             elif self._parse_github_url(url) is not None:
                 zip_bytes, subpath = await self._fetch_github_skill(url)
                 if subpath:
                     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
                         repo_zip_root = zf.namelist()[0].split("/")[0] + "/"
                     installed_names = self._extract_and_install_skills(
-                        zip_bytes, subpath=subpath, repo_zip_root=repo_zip_root
+                        zip_bytes, subpath=subpath, repo_zip_root=repo_zip_root, overwrite=overwrite
                     )
                 else:
-                    installed_names = self._extract_and_install_skills(zip_bytes)
+                    installed_names = self._extract_and_install_skills(zip_bytes, overwrite=overwrite)
             else:
                 zip_bytes = await self._fetch_zip_from_url(url)
-                installed_names = self._extract_and_install_skills(zip_bytes)
+                installed_names = self._extract_and_install_skills(zip_bytes, overwrite=overwrite)
         elif zip_base64:
             zip_bytes = base64.b64decode(zip_base64)
-            installed_names = self._extract_and_install_skills(zip_bytes)
+            installed_names = self._extract_and_install_skills(zip_bytes, overwrite=overwrite)
         else:
             raise ValueError("Either 'url' or 'zip_base64' must be provided.")
 

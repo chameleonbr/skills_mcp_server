@@ -202,6 +202,7 @@ async def add_skill(
         installed_skills = await manager.install_skill(
             url=body.url,
             zip_base64=body.zip_base64,
+            overwrite=body.overwrite,
         )
         return InstallResponse(
             message=f"Successfully installed {len(installed_skills)} skill(s).",
@@ -229,6 +230,7 @@ async def add_skill(
 async def upload_skill(
     file: Annotated[UploadFile, File(description="Archive (.zip or .skill) containing the skill folder.")],
     manager: Annotated[SkillManager, Depends(get_skill_manager)],
+    overwrite: bool = Form(False, description="If True, any existing skill with the same name will be overwritten."),
 ) -> InstallResponse:
     """Install a skill by uploading an archive file directly (multipart/form-data).
 
@@ -242,7 +244,7 @@ async def upload_skill(
         )
     try:
         zip_bytes = await file.read()
-        installed_skills = manager._extract_and_install_skills(zip_bytes)
+        installed_skills = manager._extract_and_install_skills(zip_bytes, overwrite=overwrite)
         manager.reload()
         return InstallResponse(
             message=f"Successfully installed {len(installed_skills)} skill(s).",

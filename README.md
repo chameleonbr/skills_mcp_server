@@ -161,7 +161,8 @@ Returns `200 OK` with the number of currently loaded skills.
 ```bash
 curl -X POST http://localhost:8000/skills/upload \
   -H "X-API-Key: your_api_key" \
-  -F "file=@my_skill.skill" # also accepts .zip
+  -F "file=@my_skill.skill" \
+  -F "overwrite=true" # optional, defaults to false
 ```
 
 ### 2. URL (direct zip download)
@@ -170,7 +171,7 @@ curl -X POST http://localhost:8000/skills/upload \
 curl -X POST "http://localhost:8000/skills" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com/my_skill.zip"}'
+  -d '{"url": "https://example.com/my_skill.zip", "overwrite": true}'
 ```
 
 ### 3. Agent Skills Discovery RFC (Index JSON) 📖
@@ -181,7 +182,7 @@ Install multiple skills curated in a `skills_index.json` file as defined by the 
 curl -X POST "http://localhost:8000/skills" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://raw.githubusercontent.com/LambdaTest/agent-skills/refs/heads/main/skills_index.json"}'
+  -d '{"url": "https://raw.githubusercontent.com/LambdaTest/agent-skills/refs/heads/main/skills_index.json", "overwrite": true}'
 ```
 
 ### 3. GitHub URL 🐙
@@ -214,7 +215,7 @@ curl -X POST "http://localhost:8000/skills" \
 curl -X POST "http://localhost:8000/skills" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
-  -d "{\"zip_base64\": \"$(base64 -w0 my_skill.zip)\"}"
+  -d "{\"zip_base64\": \"$(base64 -w0 my_skill.zip)\", \"overwrite\": true}"
 ```
 
 ---

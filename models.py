@@ -35,6 +35,10 @@ class AddSkillRequest(BaseModel):
         default=None,
         description="Base64-encoded .zip archive containing the skill folder.",
     )
+    overwrite: bool = Field(
+        default=False,
+        description="If True, any existing skill with the same name will be overwritten.",
+    )
 
     class Config:
         json_schema_extra = {
