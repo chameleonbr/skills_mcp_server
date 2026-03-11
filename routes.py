@@ -70,76 +70,29 @@ def list_skills(
 ENFORCEMENT_PROMPT = """
 <skills_usage_enforcement>
 
-## CORE RULE — SKILLS AS PRIMARY EXECUTION LAYER
+## RULE: Skills are loaded once per conversation, not per message.
 
-Skills are the primary execution layer of the system. No MCP service, external 
-tool, or API may be used without first loading the relevant skill.
+Before calling any tool or MCP, check conversation history for a prior
+get_skill_instructions() call for the relevant skill.
 
----
+## Decision (run this once per user message):
 
-## Decision Flow (STRICT ORDER)
+1. Find the matching skill in <skills_system> for the user's request.
+   → No match? Respond directly. Stop here.
 
-For EVERY user request, follow this sequence:
+2. Scan conversation history for a previous get_skill_instructions(skill_name) call.
+   → Found? Read its output from history and follow those instructions. Stop here.
+   → Not found? Call get_skill_instructions(skill_name) once, then follow instructions.
 
-### STEP 1 — Check if the skill was already loaded this turn
-- Review the current conversation history.
-- If `get_skill_instructions(skill_name)` was already called successfully 
-  for this skill **in this turn**, skip directly to STEP 4.
-- If not yet loaded, proceed to STEP 2.
+## Tool call order (only when skill instructions require it):
 
-### STEP 2 — Scan available skills
-- Compare the request against ALL skills in `<skills_system>`.
-- Identify the most relevant skill.
+get_skill_instructions → get_skill_reference → get_skill_script → MCP/external tools → response
 
-### STEP 3 — Load the skill (ONCE per turn)
-- Call `get_skill_instructions(skill_name)` exactly once.
-- Store the result for use in subsequent steps.
-- ⚠️ Do not call again if already executed this turn.
+## Hard stops to prevent loops:
 
-### STEP 4 — Execute according to skill instructions
-- Follow the returned instructions.
-- Call MCPs or external tools only if the skill explicitly instructs it.
-
-### STEP 5 — Produce final response
-
----
-
-## Tool Call Order Within a Skill
-
-1. `get_skill_instructions(skill_name)` — always first, only once
-2. `get_skill_reference(skill_name, path)` — if indicated by instructions
-3. `get_skill_script(skill_name, path)` — only if scripts exist
-4. Tools/MCPs required by the skill
-5. Final response
-
----
-
-## Anti-Loop Rule
-
-**Loop condition:** A call is considered a duplicate if:
-- The same tool was called
-- With the same parameters
-- Within the same conversation turn
-
-**If a duplicate call is detected:**
-1. Use the data already returned by the previous call
-2. If the data was insufficient, ask the user for additional information
-3. If no data was found, inform the user and stop
-
-**Never** repeat the same call expecting a different result.
-
----
-
-## Pre-Action Checklist
-
-Before any action, answer:
-
-- [ ] Has the relevant skill already been loaded this turn?
-  - Yes → follow the instructions already received
-  - No → execute STEP 3
-- [ ] Has this tool/skill already been called with these parameters this turn?
-  - Yes → use the data already returned
-  - No → proceed
+- get_skill_instructions() for the same skill: call ONCE per conversation, never again.
+- Any tool with identical parameters: call ONCE, use returned data on subsequent needs.
+- Empty result from a tool: ask the user for missing info. Do not retry.
 
 </skills_usage_enforcement>
 """
