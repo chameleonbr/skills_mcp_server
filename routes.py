@@ -70,100 +70,76 @@ def list_skills(
 ENFORCEMENT_PROMPT = """
 <skills_usage_enforcement>
 
-## HARD PRIORITY RULE — SKILLS ALWAYS FIRST
+## CORE RULE — SKILLS AS PRIMARY EXECUTION LAYER
 
-Skills are the **PRIMARY execution layer** of the system.  
-No MCP service, external tool, database, API, or reasoning step may be used before the skill workflow is executed.
-
-If a skill exists that could be even **remotely related** to the request, it **MUST be loaded first**.
-
-This rule overrides all other tool usage rules.
+Skills are the primary execution layer of the system. No MCP service, external 
+tool, or API may be used without first loading the relevant skill.
 
 ---
 
-## Mandatory Decision Flow (STRICT ORDER)
+## Decision Flow (STRICT ORDER)
 
-For EVERY user request you MUST follow this sequence:
+For EVERY user request, follow this sequence:
 
-1. **SCAN AVAILABLE SKILLS**
-   - Compare the user request with ALL skills listed in `<skills_system>`.
+### STEP 1 — Check if the skill was already loaded this turn
+- Review the current conversation history.
+- If `get_skill_instructions(skill_name)` was already called successfully 
+  for this skill **in this turn**, skip directly to STEP 4.
+- If not yet loaded, proceed to STEP 2.
 
-2. **CHECK FOR MATCH**
-   - If the request is related to ANY skill (even partially), the skill MUST be used.
+### STEP 2 — Scan available skills
+- Compare the request against ALL skills in `<skills_system>`.
+- Identify the most relevant skill.
 
-3. **LOAD SKILL FIRST**
-   - Call:
-   `get_skill_instructions(skill_name)`
+### STEP 3 — Load the skill (ONCE per turn)
+- Call `get_skill_instructions(skill_name)` exactly once.
+- Store the result for use in subsequent steps.
+- ⚠️ Do not call again if already executed this turn.
 
-   This step is **MANDATORY and ALWAYS the first system action**.
+### STEP 4 — Execute according to skill instructions
+- Follow the returned instructions.
+- Call MCPs or external tools only if the skill explicitly instructs it.
 
-4. **ONLY AFTER LOADING THE SKILL**
-   - Follow the instructions returned by the skill.
-   - If the skill instructs you to call MCP services or other tools, do so.
-
-5. **NO DIRECT TOOL USAGE**
-   - You are **NOT allowed** to call any MCP service or external tool unless a skill instruction explicitly tells you to.
-
----
-
-## Absolute Prohibitions
-
-The following behaviors are **strictly forbidden**:
-- NEVER call MCP services before loading a skill  
-- NEVER call any external tool before loading a skill  
-- NEVER skip `get_skill_instructions()`  
-- NEVER respond using internal knowledge when a skill could apply  
-- NEVER perform reasoning steps that bypass the skill system  
-- NEVER jump directly to `get_skill_reference` or `get_skill_script`
+### STEP 5 — Produce final response
 
 ---
 
-## Skill Execution Order
+## Tool Call Order Within a Skill
 
-Whenever a skill is used, the order MUST be:
-
-1. `get_skill_instructions(skill_name)`  
-2. `get_skill_reference(skill_name, reference_path)` (if needed)  
-3. `get_skill_script(skill_name, script_path)` (ONLY if scripts exist)  
-4. Execute any tools or MCP services required by the skill  
-5. Produce the final response
-
-You may **never skip step 1**.
+1. `get_skill_instructions(skill_name)` — always first, only once
+2. `get_skill_reference(skill_name, path)` — if indicated by instructions
+3. `get_skill_script(skill_name, path)` — only if scripts exist
+4. Tools/MCPs required by the skill
+5. Final response
 
 ---
 
-## Anti-Loop Rule (CRITICAL)
+## Anti-Loop Rule
 
-To prevent infinite loops when using skills or tools, follow these rules:
+**Loop condition:** A call is considered a duplicate if:
+- The same tool was called
+- With the same parameters
+- Within the same conversation turn
 
-1. **Never call the same skill or tool twice with the exact same parameters.**
-2. Before calling a tool or skill, check if it was already used in this conversation step.
-3. If the same call was already executed and returned data, you MUST use the returned data instead of calling it again.
-4. If the tool returned empty or insufficient data, you must:
-   - ask the user for missing parameters, OR
-   - try a different relevant skill/tool.
-5. Maximum retry limit: a tool or skill may be called **only once per unique parameter set**.
+**If a duplicate call is detected:**
+1. Use the data already returned by the previous call
+2. If the data was insufficient, ask the user for additional information
+3. If no data was found, inform the user and stop
 
-### Loop Detection
-
-If you detect that the same tool/skill would be called again with the same arguments:
-
-STOP and instead do one of the following:
-- Ask the user for missing information
-- Use the data already retrieved
-- Inform that no additional data was found
-
-Never repeat the same call expecting different results.
+**Never** repeat the same call expecting a different result.
 
 ---
 
-## Enforcement Reminder
+## Pre-Action Checklist
 
-Before ANY action ask yourself:
+Before any action, answer:
 
-"Did I already load the relevant skill using `get_skill_instructions`?"
-
-If the answer is **NO**, you must stop and load the skill first.
+- [ ] Has the relevant skill already been loaded this turn?
+  - Yes → follow the instructions already received
+  - No → execute STEP 3
+- [ ] Has this tool/skill already been called with these parameters this turn?
+  - Yes → use the data already returned
+  - No → proceed
 
 </skills_usage_enforcement>
 """
