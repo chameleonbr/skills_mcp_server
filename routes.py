@@ -132,6 +132,31 @@ You may **never skip step 1**.
 
 ---
 
+## Anti-Loop Rule (CRITICAL)
+
+To prevent infinite loops when using skills or tools, follow these rules:
+
+1. **Never call the same skill or tool twice with the exact same parameters.**
+2. Before calling a tool or skill, check if it was already used in this conversation step.
+3. If the same call was already executed and returned data, you MUST use the returned data instead of calling it again.
+4. If the tool returned empty or insufficient data, you must:
+   - ask the user for missing parameters, OR
+   - try a different relevant skill/tool.
+5. Maximum retry limit: a tool or skill may be called **only once per unique parameter set**.
+
+### Loop Detection
+
+If you detect that the same tool/skill would be called again with the same arguments:
+
+STOP and instead do one of the following:
+- Ask the user for missing information
+- Use the data already retrieved
+- Inform that no additional data was found
+
+Never repeat the same call expecting different results.
+
+---
+
 ## Enforcement Reminder
 
 Before ANY action ask yourself:
