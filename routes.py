@@ -257,6 +257,10 @@ def get_skill(
 async def add_skill(
     body: AddSkillRequest,
     manager: Annotated[SkillManager, Depends(get_skill_manager)],
+    overwrite: Optional[bool] = Query(
+        None,
+        description="If provided, overrides the overwrite field in the request body.",
+    ),
 ) -> InstallResponse:
     """Install a new skill from a URL or base64-encoded zip archive.
 
@@ -268,11 +272,15 @@ async def add_skill(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Either 'url' or 'zip_base64' must be provided.",
         )
+    
+    # Use query parameter if provided, otherwise use value from body
+    final_overwrite = overwrite if overwrite is not None else body.overwrite
+    
     try:
         installed_skills = await manager.install_skill(
             url=body.url,
             zip_base64=body.zip_base64,
-            overwrite=body.overwrite,
+            overwrite=final_overwrite,
         )
         return InstallResponse(
             message=f"Successfully installed {len(installed_skills)} skill(s).",

@@ -43,8 +43,8 @@ class AddSkillRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "examples": [
-                {"url": "https://example.com/my_skill.zip"},
-                {"zip_base64": "<base64-encoded-zip>"},
+                {"url": "https://example.com/my_skill.zip", "overwrite": True},
+                {"zip_base64": "<base64-encoded-zip>", "overwrite": False},
             ]
         }
 

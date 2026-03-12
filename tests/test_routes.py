@@ -57,6 +57,15 @@ async def test_add_skill_url_overwrite(test_client, mock_skill_manager):
     mock_skill_manager.install_skill.assert_called_once_with(url="https://example.com/skill.zip", zip_base64=None, overwrite=True)
 
 @pytest.mark.asyncio
+async def test_add_skill_query_overwrite(test_client, mock_skill_manager):
+    mock_skill_manager.install_skill.return_value = ["new_skill"]
+    
+    # Query parameter should override body parameter
+    response = test_client.post("/skills?overwrite=true", json={"url": "https://example.com/skill.zip", "overwrite": False})
+    assert response.status_code == status.HTTP_201_CREATED
+    mock_skill_manager.install_skill.assert_called_once_with(url="https://example.com/skill.zip", zip_base64=None, overwrite=True)
+
+@pytest.mark.asyncio
 async def test_add_skill_base64(test_client, mock_skill_manager):
     mock_skill_manager.install_skill.return_value = ["new_skill"]
     
