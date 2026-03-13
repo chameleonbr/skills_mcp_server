@@ -257,7 +257,7 @@ The MCP server is mounted at `/mcp` using the **StreamableHTTP** transport.
 
 ### Agent System Prompt Integration
 
-To inject skill awareness into any agent, retrieve the pre-built prompt snippet. You can optionally pass `skill_list` to only include specific skills by name. By default, a strict prompt enforcement string is prepended to ensure agents use tools exactly as instructed, which can be disabled via `prompt_enforcement=false`.
+To inject skill awareness into any agent, retrieve the pre-built prompt snippet. You can optionally pass `skill_list` to only include specific skills by name. By default, a strict prompt enforcement string is prepended to ensure agents use tools exactly as instructed, which can be disabled via `prompt_enforcement=false`. The prompt enforcement string is regularly refined for optimal formatting and context efficiency.
 
 ```bash
 # Get snippet containing ALL installed skills (includes prompt enforcement by default)

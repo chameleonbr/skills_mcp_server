@@ -68,105 +68,105 @@ def list_skills(
     return manager.list_skills()
 
 ENFORCEMENT_PROMPT = """
-<skills_usage_enforcement>                                                                                           
-     
-      ## RULE                                                   
-                                                                
-      Skills are loaded ONCE per conversation. Never call       
-      get_skill_instructions() twice for the same skill.        
-                                                                
-      ## DECISION (run once per user message)                   
-                                                                
-      1. Find matching skill in <skills_system>.                
-         → No match? Respond directly. STOP.                    
-                                                                
-      2. Scan history for previous                              
-      get_skill_instructions(skill_name).                       
-         → Found? Follow cached instructions. STOP.             
-         → Not found? Call it ONCE, then follow instructions.   
-      STOP.                                                     
-                                                                
-      3. Tool call order (only when instructions require it):   
-         get_skill_instructions → get_skill_reference →         
-      get_skill_script → tools → response                       
-                                                                
-      ## BEFORE ACTING — Validate via 3 paths                   
-                                                                
-      PATH 1: What skill does the message request? Already      
-      cached?                                                   
-      PATH 2: What task type is this (generation, editing,      
-      query, automation)? Which skill fits?                     
-      PATH 3: What output does the user expect (file, text,     
-      action)? Tools needed?                                    
-                                                                
-      → 2/3 agree? Execute.                                     
-      → All diverge? Ask the user.                              
-                                                                
-      ## MULTI-STEP TASKS — Decompose and chain                 
-                                                                
-      SUB-TASK 1: [what] → REASON: [why] → TOOL: [call] →       
-      OUTPUT: [result]                                          
-      SUB-TASK 2: [what] → REASON: [how previous output informs 
-      this] → TOOL: [call] → OUTPUT: [result]                   
-      SYNTHESIS → RESPONSE                                      
-                                                                
-      ## EXAMPLES                                               
-                                                                
-      ### First call (skill not cached)                         
-                                                                
-      User: "Generate a Q3 sales report."                       
-      → Skill: "report_generator" ✓ → History has it? NO → Call 
-      get_skill_instructions("report_generator") → Follow output
-      → Generate report.                                        
-                                                                
-      ### Skill already cached                                  
-                                                                
-      User: "Now generate Q4 with the same parameters."         
-      → Skill: "report_generator" ✓ → History has it? YES       
-      (message #3) → Re-read output → Generate Q4. Do NOT call  
-      get_skill_instructions again.                             
-                                                                
-      ### No skill needed                                       
-                                                                
-      User: "What is the capital of France?"                    
-      → Skill match? NO → Respond "Paris" directly. No tools.   
-                                                                
-      ### Empty result from tool                                
-                                                                
-      User: "Create an image of the company logo."              
-      → Skill: "image_generator" ✓ → Already cached ✓ →         
-      generate_image() returns EMPTY → Ask user for details. Do 
-      NOT retry.                                                
-                                                                
-      ### Full chain (multi-step)                               
-                                                                
-      User: "Automate welcome emails for new customers."        
-      → REASON: Need "email_automation" → TOOL:                 
-      get_skill_instructions("email_automation") → OUTPUT: Use  
-      "welcome" template via MCP                                
-      → REASON: Need template → TOOL:                           
-      get_skill_reference("email_automation",                   
-      "welcome_template") → OUTPUT: HTML returned               
-      → REASON: Need send script → TOOL:                        
-      get_skill_script("email_automation", "send_welcome") →    
-      OUTPUT: Script ready                                      
-      → REASON: Execute → TOOL: mcp_email_send(template,        
-      recipients) → OUTPUT: Sent                                
-      → RESPONSE: "Welcome emails sent to all new customers     
-      registered today."                                        
-                                                                
-      ## HARD STOPS                                             
-                                                                
-      - get_skill_instructions() for same skill: ONCE per       
-      conversation.                                             
-      - Any tool with identical parameters: ONCE. Reuse result. 
-      - Empty result: Ask user. Never retry.                    
-      - Skill not in <skills_system>: Respond directly. Never   
-      invent skills.                                            
-      - Unsure which skill: Validate via 3 paths. No consensus →
-      ask user.                                                 
-                                                                
-      </skills_usage_enforcement> 
+<skills_usage_enforcement>
+
+## RULE
+
+Skills are loaded ONCE per conversation. Never call
+get_skill_instructions() twice for the same skill.
+
+## DECISION (run once per user message)
+
+1. Find matching skill in <skills_system>.
+    → No match? Respond directly. STOP.
+
+2. Scan history for previous
+get_skill_instructions(skill_name).
+    → Found? Follow cached instructions. STOP.
+    → Not found? Call it ONCE, then follow instructions.
+STOP.
+
+3. Tool call order (only when instructions require it):
+    get_skill_instructions → get_skill_reference →
+get_skill_script → tools → response
+
+## BEFORE ACTING — Validate via 3 paths
+
+PATH 1: What skill does the message request? Already
+cached?
+PATH 2: What task type is this (generation, editing,
+query, automation)? Which skill fits?
+PATH 3: What output does the user expect (file, text,
+action)? Tools needed?
+
+→ 2/3 agree? Execute.
+→ All diverge? Ask the user.
+
+## MULTI-STEP TASKS — Decompose and chain
+
+SUB-TASK 1: [what] → REASON: [why] → TOOL: [call] →
+OUTPUT: [result]
+SUB-TASK 2: [what] → REASON: [how previous output informs
+this] → TOOL: [call] → OUTPUT: [result]
+SYNTHESIS → RESPONSE
+
+## EXAMPLES
+
+### First call (skill not cached)
+
+User: "Generate a Q3 sales report."
+→ Skill: "report_generator" ✓ → History has it? NO → Call
+get_skill_instructions("report_generator") → Follow output
+→ Generate report.
+
+### Skill already cached
+
+User: "Now generate Q4 with the same parameters."
+→ Skill: "report_generator" ✓ → History has it? YES
+(message #3) → Re-read output → Generate Q4. Do NOT call
+get_skill_instructions again.
+
+### No skill needed
+
+User: "What is the capital of France?"
+→ Skill match? NO → Respond "Paris" directly. No tools.
+
+### Empty result from tool
+
+User: "Create an image of the company logo."
+→ Skill: "image_generator" ✓ → Already cached ✓ →
+generate_image() returns EMPTY → Ask user for details. Do
+NOT retry.
+
+### Full chain (multi-step)
+
+User: "Automate welcome emails for new customers."
+→ REASON: Need "email_automation" → TOOL:
+get_skill_instructions("email_automation") → OUTPUT: Use
+"welcome" template via MCP
+→ REASON: Need template → TOOL:
+get_skill_reference("email_automation",
+"welcome_template") → OUTPUT: HTML returned
+→ REASON: Need send script → TOOL:
+get_skill_script("email_automation", "send_welcome") →
+OUTPUT: Script ready
+→ REASON: Execute → TOOL: mcp_email_send(template,
+recipients) → OUTPUT: Sent
+→ RESPONSE: "Welcome emails sent to all new customers
+registered today."
+
+## HARD STOPS
+
+- get_skill_instructions() for same skill: ONCE per
+conversation.
+- Any tool with identical parameters: ONCE. Reuse result.
+- Empty result: Ask user. Never retry.
+- Skill not in <skills_system>: Respond directly. Never
+invent skills.
+- Unsure which skill: Validate via 3 paths. No consensus →
+ask user.
+
+</skills_usage_enforcement>
 """
 
 @router.get(
